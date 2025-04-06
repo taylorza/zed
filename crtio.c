@@ -49,32 +49,43 @@ uint8_t caret_state[] = {
 extern void setup_caret_sprite(void);
 void position_caret(void);
 void update_caret(void);
-void scroll_up(void);
 
 void screen_init(void) {
     cx = 0;
     cy = 0;
     old_reg_6b = ZXN_READ_REG(0x6b);
     zx_border(1);
-    //// Sprite palette
-    ZXN_WRITE_REG(0x43, 0b00100000);      // Sprite palette 1 auto increment
-    ZXN_WRITE_REG(0x40, 0);             
-    ZXN_WRITE_REG(0x41, 0b11001111);      // 0-Purple
+    // Sprite palette
+    ZXN_NEXTREG(0x43, 0b00100000);      // Sprite palette 1 auto increment
+    ZXN_NEXTREG(0x40, 0);             
+    ZXN_NEXTREG(0x41, 0b11001111);      // 0-Purple
 
     // Tilemap palette
-    ZXN_WRITE_REG(0x43, 0b00110000);      // Tilemap palette 1 auto increment
-    ZXN_WRITE_REG(0x40, 0);             
-    ZXN_WRITE_REG(0x41, 0b00000010);      // 0-Blue
-    ZXN_WRITE_REG(0x41, 0b11111100);      // 1-Yellow
+    ZXN_NEXTREG(0x43, 0b00110000);      // Tilemap palette 1 auto increment
+    ZXN_NEXTREG(0x40, 0);             
+    ZXN_NEXTREG(0x41, 0b00000010);      // 0-Blue
+    ZXN_NEXTREG(0x41, 0b11111100);      // 1-Yellow
     
-    ZXN_WRITE_REG(0x40, 16);             
-    ZXN_WRITE_REG(0x41, 0b11111100);      // 0-Yellow
-    ZXN_WRITE_REG(0x41, 0b00000010);      // 1-Blue
+    ZXN_NEXTREG(0x40, 16);             
+    ZXN_NEXTREG(0x41, 0b11111100);      // 0-Yellow
+    ZXN_NEXTREG(0x41, 0b00000010);      // 1-Blue
 
-    ZXN_WRITE_REG(0x6b, 0b11001001);      // 80x32 text mode with attributes
-    ZXN_WRITE_REG(0x6c, 0b00000000);      // Palette offset and attributes
-    ZXN_WRITE_REG(0x6e, OFFSET_MAP);
-    ZXN_WRITE_REG(0x6f, OFFSET_TILES);
+    ZXN_NEXTREG(0x6b, 0b11001001);      // 80x32 text mode with attributes
+    ZXN_NEXTREGA(0x6e, OFFSET_MAP);
+    ZXN_NEXTREGA(0x6f, OFFSET_TILES);
+
+    // Set tilemap defaults
+    // Reset clip window
+    ZXN_NEXTREG(0x1c, 0b00001000);      // Reset tilemap clip index
+    ZXN_NEXTREG(0x1b, 0);               // X1 - 0
+    ZXN_NEXTREG(0x1b, 159);             // X2 - 318
+    ZXN_NEXTREG(0x1b, 0);               // Y1 - 0
+    ZXN_NEXTREG(0x1b, 255);             // Y1 - 255
+
+    // Reset scroll offsets
+    ZXN_NEXTREG(0x2f, 0);               // X Scroll offset - MSB
+    ZXN_NEXTREG(0x30, 0);               // X Scroll offset - LSB
+    ZXN_NEXTREG(0x31, 0);               // Y Scroll offset
 
     memcpy((void*)START_TILE_DEF, &font_crtio[0], sizeof(font_crtio));
     
@@ -86,7 +97,7 @@ void screen_init(void) {
 
 void screen_restore(void) {
     memset((void*)START_MAP, 0, 6144);
-    ZXN_WRITE_REG(0x6b, old_reg_6b);   
+    ZXN_NEXTREGA(0x6b, old_reg_6b);   
 }
 
 void cls(void) {
@@ -97,9 +108,7 @@ void cls(void) {
 
 void putch(char ch) {
     if (ch == NL) {
-        if (cy == SCREEN_HEIGHT) {
-            scroll_up();
-        } else {
+        if (cy < SCREEN_HEIGHT-1) {
             ++cy;            
         }
         cx=0;
@@ -107,12 +116,10 @@ void putch(char ch) {
     }
     if (ch < 32 || ch > 128) return;
 
-    if (cx >= SCREEN_WIDTH) {
+    if (cx > SCREEN_WIDTH-1) {
         cx = 0;
-        if (cy+1 >= SCREEN_HEIGHT) {
-            scroll_up();
-        } else {
-            ++cy;
+        if (cy < SCREEN_HEIGHT-1) {
+            ++cy;            
         }
     }
     char * p = screen+(((cy*SCREEN_WIDTH) + cx) << 1);
@@ -122,7 +129,7 @@ void putch(char ch) {
 }
 
 void clreol(void) {
-    if (cx >= SCREEN_WIDTH) return;
+    if (cx > SCREEN_WIDTH-1) return;
     char * p = screen+(((cy*SCREEN_WIDTH) + cx) << 1);
     memset(p, 0, (SCREEN_WIDTH - cx) << 1);    
 }
@@ -197,10 +204,6 @@ void toggle_caret(void) {
         caret_state[3] ^= 0x80;     // 0x38
         update_caret();    
     }
-}
-
-void scroll_up(void) {
-    memcpy((void*)START_MAP, (void*)(START_MAP+SCREEN_WIDTH), SCREEN_WIDTH * (SCREEN_HEIGHT-1));
 }
 
 void set_cursor_pos(uint8_t x, uint8_t y) {
