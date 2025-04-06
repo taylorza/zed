@@ -2,3 +2,4 @@
 
 char scratch_buffer[SCRATCH_BUFFER_SIZE];
 char filename[MAX_FILENAME_LEN];
+char tmpfilename[MAX_FILENAME_LEN+4];

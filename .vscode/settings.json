@@ -14,6 +14,7 @@
         "config_zxn.h": "c",
         "config_zx.h": "c",
         "stdlib.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "buffers.h": "c"
     }
 }

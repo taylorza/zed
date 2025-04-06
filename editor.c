@@ -605,23 +605,33 @@ CommandAction editor_toggle_extend(EditorState* editor) {
 }
 
 int editor_save_file(EditorState* editor) {
+    char buf[32];
 #ifdef __ZXNEXT
     errno = 0;
-    char f = esxdos_f_open(editor->filename, ESXDOS_MODE_W | ESXDOS_MODE_CT);
+    strcpy(tmpfilename, editor->filename);
+    strcat(tmpfilename,".zed");
+    char f = esxdos_f_open(tmpfilename, ESXDOS_MODE_W | ESXDOS_MODE_CT);
     if (errno) return errno;
 
-    esxdos_f_write(f, editor->buffer, editor->gap_start);
-    if (errno) {
-        esxdos_f_close(f);
-        return errno;
-    }
-
-    esxdos_f_write(f, editor->buffer + editor->gap_end, TEXT_BUFFER_SIZE - editor->gap_end);
-    if (errno) {
-        esxdos_f_close(f);
-        return errno;
+    int total = editor_length(editor);
+    int i=0;
+    while(i<total) {
+        int j = 0;
+        while(j<sizeof(buf)>>1 && i<total) {
+            char ch = editor_get_char(editor, i++);
+            buf[j++] = ch;
+            if (ch == '\r') buf[j++] = '\n';            
+        }
+        esxdos_f_write(f, buf, j);
+        if (errno) {
+            esxdos_f_close(f);
+            return errno;
+        }
     }
     esxdos_f_close(f);
+    if (esx_f_unlink(editor->filename)) return errno;
+    if (esx_f_rename(tmpfilename, editor->filename)) return errno;
+    esx_f_unlink(tmpfilename);
 #endif //__ZXNEXT
     return 0;
 }
