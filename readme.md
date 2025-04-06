@@ -7,6 +7,8 @@ A native text editor for the ZX Spectrum Next.
 ## Installing the editor
 The editor is a DOT command, the recommended installation method is to copy the ZED binary file to the DOT folder located in the root of your Next OS SD card.
 
+The latest binary can be downloaded from [itch.io](https://taylorza.itch.io/zed)
+
 ---
 
 ## Starting the editor
