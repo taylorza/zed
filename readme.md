@@ -1,56 +1,96 @@
 # ZED Text Editor
 
-A tiny native text editor for the ZX Spectrum Next.
+A native text editor for the ZX Spectrum Next.
+
+---
 
 ## Installing the editor
-The editor is a DOT command, so the best way to install it is to copy the ZED binary file to the DOT folder in the root of your Next OS SD card.
+The editor is a DOT command, the recommended installation method is to copy the ZED binary file to the DOT folder located in the root of your Next OS SD card.
+
+---
 
 ## Starting the editor
 Once installed you can launch the editor in one of two ways.
 
-1. Launch without a file
+### 1. Launch without a file
 Starts a new document and prompt for a file name when you either save or exit and choose to save the file.
-```
+```bash
 .zed
 ```
 
-2. Launch with a filename passed at the command line
-If the file exists the file will be loaded into the editor, otherwise a new document will be created with the file name defaulted to the name passed at the command line.
-```
+### 2. Launch with a filename passed at the Command Line
+
+If the specified file exists, it will be loaded into the editor. Otherwise, a new document will be created with the filename prefilled.
+
+```bash
 .zed readme.txt
 ```
 
+---
+
 ## Editing files
-Once launched you can immediately start editing files. Use the cursor/arrow keys to move around as you would expect.
+
+After launching, you can immediately start editing. Use the cursor/arrow keys for navigation as expected.
 
 ### Paging through large documents
-In the status/info section at the bottom of the editor screen you will see highlighted `EXT` which defaults to `Off`. This is the extended keyboard mode. To enable extended keyboard mode, press the `EXTEND MODE` button on the Next/N-GO keyboard, `CAPS SHIFT + SYMBOL SHIFT` on a rubber key Speccy or press `Ctrl+Shift` on an external keyboard, which will toggle `EXT` to `On`. In extended mode, the Up/Down arrow keys will now move up and down one page at a time. To get out of extended mode, you can press the approriate `EXTEND MODE` key combination again.
+The extended keyboard mode enables you to page through the document rather than moving up and down one line at a time.
+
+* The status/info section at the bottom displays the `EXT` indicator, which defaults to Off.
+
+* To enable extended keyboard mode:
+  * Press `EXTEND MODE` on the Next/N-GO keyboard.
+  * Press `CAPS SHIFT`+`SYMBOL SHIFT` on a rubber key Speccy.
+  * Press `Ctrl`+`Shift` on an external keyboard.
+
+* When `EXT` is set to `On`, the Up/Down arrow keys will move up or down one page at a time.
+
+* To return to normal mode, press the appropriate `EXTEND MODE` key combination again.
 
 ### Switching to Command mode
-Command mode provides access to the functions in the status/info section. Pressing `Edit` on the Next/N-GO keyboard, `CAPS SHIFT + 1` on the rubber key Speccy or the `Escape` key on an external keyboard will toggle command mode. In the status/info section, you will always see what mode pressing `Escape` will take you to, at startup you are in Edit mode, so the `ESC` indicator shows `Command` which is the mode you will move to when pressing `ESC`, once in command mode, the `ESC` indicator will show `Edit` as being the mode that you will switch back to.
 
-Once in command mode, the remainder of the action keys, indicated by the `↑` prefix will be higlighted to show they are now available. To activate any one of the actions, press the `SYMBOL SHIFT` key together with the letter for the corresponding action you want to activate.
+Command mode gives access to the functions displayed in the status/info section.
 
-**NOTE** - you cannot edit the file while in command mode. The navigation is active while in command mode.
+* To toggle command mode:
+  * Press `Edit` on the Next/N-GO keyboard.
+  * Press `CAPS SHIFT`+`1` on a rubber key Speccy.
+  * Press `Escape` on an external keyboard.
 
-### Cut/Copy/Paste
-The editor supports selecting sections of text and either copying or cutting the text. 
+In the status/info section, you’ll see the current mode indicated. For example:
 
-To mark/select a section of text to cut or copy, switch into command mode and press `SYMBOL SHIFT+M` (`↑M`) to set a marker/anchor for the selection. Once set, as you move the cursor the text between the marker and the cursor will be selected.
+* In Edit mode, the `ESC` indicator shows `Edit`.
+* In Command mode, the `ESC` indicator switches to `Command`.
 
-The marker can be cleared by pressing the hot key combination again.
+Once in Command mode:
 
-Once selected, you can copy the select by pressing `↑C` to copy the selected text to the copy buffer. Once copied, you can then navigate to a new location in the file and prest `↑V` to paste the copied text.
+* Keys with the `↑` prefix will become active and highlighted.
+* Activate functions by pressing the `SYMBOL SHIFT` key along with the letter of the desired action.
 
-Cutting text using `↑X` will copy the selected text to the copy buffer and remove it from the document. As with copy, you can then paste the text that was removed using the `↑V` paste feature.
+**NOTE:** Editing is disabled while in Command mode, but navigation remains active.
 
-**NOTE** the copy buffer is limited to 2K, the current implementation will move the marker to ensure that there is never more than 2K worth of text between the marker and the cursor. This approach might change, but for now this ensures that you will never cut text and then be left with only a subset of that in the copy buffer.
+### Cut/Copy and Paste
+The editor allows text selection for cutting or copying.
+
+#### Marking/Selecting Text:
+1. Switch to Command mode.
+2. Press `SYMBOL SHIFT`+`M` (`↑M`) to set a marker/anchor.
+3. Move the cursor to select text between the marker and the cursor position.
+4. To clear the marker, press the `↑M` key combination again.
+
+#### Copying Text:
+* Once text is selected, press `↑C` to copy it to the buffer.
+* Navigate to a new location and press `↑V` to paste.
+
+#### Cutting Text:
+* Press `↑X` to cut (copy to buffer and remove from the document).
+* Navigate to a new location and press `↑V` to paste.
+
+**NOTE:** The copy buffer is limited to 2K. The marker will adjust automatically to prevent exceeding this limit.
 
 ### Other commands
 
 |Key|Description|
 |---|-----------|
-| `↑S` Save | Saves the current document, it will prompt for a filename defaulting to the current name if it has been set previously. This is an opportunity to change the filename (ie. Save As) or just press enter to stick with the existing file name.
-| `↑F` Find | Search for text in the document. The search starts at the current cursor position and will wrap arround to the start of the document. 
-| `↑G` Goto | Goto/Jump directly to a line number in the document. 
-| `↑Q` Quit | Quit the editor. If the document has been modified, you will be prompted to confirm if you want to save the document before exiting the editor.
+| `↑S` Save | Saves the current document |
+| `↑F` Find | Searches for text starting at the cursor position and wraps around to the document's beginning.|
+| `↑G` Goto | Moves the cursor directly to specific line number.| 
+| `↑Q` Quit | Exits the editor. You will be prompted to save if the document has unsaved changes.|

@@ -76,7 +76,7 @@ CommandAction editor_goto(EditorState* editor);
 CommandAction editor_quit(EditorState* editor);
 
 Command commands[] = {
-    {"ESC", "Command", KEY_ESC, editor_toggle_mode},
+    {"ESC", "Edit", KEY_ESC, editor_toggle_mode},
     {"EXT", "Off", KEY_EXTEND, editor_toggle_extend},
     {"^S", "Save", KEY_SAVE, editor_save},
     {"^M", "Mark", KEY_MARK, editor_mark},
@@ -455,7 +455,7 @@ void editor_print_hotkey(EditorState* editor, const char* short_cut_key, const c
 }
 
 void editor_update_hotkeys(EditorState* editor) {
-    commands[0].description = editor->mode == EDITOR_MODE_COMMAND ? "Edit" : "Command";
+    commands[0].description = editor->mode == EDITOR_MODE_COMMAND ? "Command" : "Edit";
     commands[1].description = editor->extend_kbd ? "On" : "Off";
 }
 
