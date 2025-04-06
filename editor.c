@@ -11,6 +11,8 @@
 #include "crtio.h"
 #include "editor.h"
 
+#define VERSION "0.1"
+
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
 
@@ -481,6 +483,7 @@ void editor_update_status(EditorState* editor, char key) {
             editor_print_hotkey(editor, cmd->short_cut_key, cmd->description, i < 2);
             if (++i % HOTKEY_ITEMS_PER_LINE == 0) putch(NL);
         }
+        print("Version: %s", VERSION);
     }
 
     set_cursor_pos(0, SCREEN_HEIGHT - 1);
