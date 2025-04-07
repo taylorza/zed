@@ -11,14 +11,13 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.1"
+#define VERSION "0.1b"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
 
 #define LINES SCREEN_HEIGHT-4
 #define COLS 80
-
 
 #define TEXT_BUFFER_SIZE 22528
 char text_buffer[TEXT_BUFFER_SIZE];
@@ -653,14 +652,30 @@ void editor_init_file(EditorState* editor, const char* filepath) {
                 char* src = (char*)(editor->buffer + len);
                 char* dst = (char*)(editor->buffer + TEXT_BUFFER_SIZE);
                 size_t bytescopied = 0;
+                char skip_eol_char = 0;
+                char lead_eol_char = 0;
                 while (src >= &editor->buffer[0]) {
-                    if (*src == '\t') {
+                    char ch = *src;
+                    if (!skip_eol_char) {
+                        switch(ch) {
+                            case '\r':
+                                lead_eol_char = '\r';
+                                skip_eol_char = '\n';
+                            break;
+                            case '\n':
+                                lead_eol_char = '\n';
+                                skip_eol_char = '\r';                             
+                            break;
+                        }                    
+                    }
+                    if (ch == '\t') {
                         *dst-- = ' ';
                         *dst-- = ' ';
                         bytescopied += 2;
                     }
-                    else if (*src != '\n') {
-                        *dst-- = *src;
+                    else if (ch != skip_eol_char) {
+                        if (lead_eol_char && ch == lead_eol_char) ch = NL;
+                        *dst-- = ch;
                         ++bytescopied;
                     }
                     --src;
