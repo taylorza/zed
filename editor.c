@@ -40,6 +40,7 @@ typedef enum CommandAction {
     COMMAND_ACTION_NONE,
     COMMAND_ACTION_FAILED,
     COMMAND_ACTION_QUIT,
+    COMMAND_ACTION_CANCEL,
 } CommandAction;
 
 typedef struct {
@@ -473,17 +474,16 @@ void editor_update_status(EditorState* editor, char key) {
     editor_get_cursor_position(editor, &cursor_row, &cursor_col);
 
     if (editor->mode != lastmode || editor->extend_kbd != lastextkbd) {
-        lastmode = editor->mode;
-        lastextkbd = editor->extend_kbd;
-
         editor_update_hotkeys(editor);
         set_cursor_pos(0, LINES + 1);
         int i = 0;
-        for (Command* cmd = (Command*)commands; cmd->short_cut_key != NULL; ++cmd) {
+        for (Command* cmd = &commands[0]; cmd->short_cut_key != NULL; ++cmd) {
             editor_print_hotkey(editor, cmd->short_cut_key, cmd->description, i < 2);
             if (++i % HOTKEY_ITEMS_PER_LINE == 0) putch(NL);
-        }
+        }   
         print("Version: %s", VERSION);
+        lastmode = editor->mode;
+        lastextkbd = editor->extend_kbd;           
     }
 
     set_cursor_pos(0, SCREEN_HEIGHT - 1);
@@ -611,9 +611,9 @@ int editor_save_file(EditorState* editor) {
     char buf[32];
 #ifdef __ZXNEXT
     errno = 0;
-    strcpy(tmpfilename, editor->filename);
-    strcat(tmpfilename,".zed");
-    char f = esxdos_f_open(tmpfilename, ESXDOS_MODE_W | ESXDOS_MODE_CT);
+    strcpy(tmpbuffer, editor->filename);
+    strcat(tmpbuffer,".zed");
+    char f = esxdos_f_open(tmpbuffer, ESXDOS_MODE_W | ESXDOS_MODE_CT);
     if (errno) return errno;
 
     int total = editor_length(editor);
@@ -632,9 +632,9 @@ int editor_save_file(EditorState* editor) {
         }
     }
     esxdos_f_close(f);
-    if (esx_f_unlink(editor->filename)) return errno;
-    if (esx_f_rename(tmpfilename, editor->filename)) return errno;
-    esx_f_unlink(tmpfilename);
+    esx_f_unlink(editor->filename);
+    if (esx_f_rename(tmpbuffer, editor->filename)) return errno;
+    esx_f_unlink(tmpbuffer);
 #endif //__ZXNEXT
     return 0;
 }
@@ -678,12 +678,13 @@ CommandAction editor_save(EditorState* editor) {
     set_cursor_pos(0, LINES);
 
     if (!edit_line("File name", NULL, filename, MAX_FILENAME_LEN))
-        return COMMAND_ACTION_NONE;
+        return COMMAND_ACTION_CANCEL;
     
     editor->filename = &filename[0];
     int status = editor_save_file(editor);
     if (status) {
-        editor_message(strerror(status));
+        esx_m_geterr(status, tmpbuffer);
+        editor_message(tmpbuffer);
         return COMMAND_ACTION_FAILED;
     }
 
@@ -809,7 +810,9 @@ CommandAction editor_quit(EditorState* editor) {
         print("File modified. Save? (y/n) ");
         char ch = getch();
         if (ch == 'y' || ch == 'Y') {
-            editor_save(editor);
+            if (editor_save(editor) != COMMAND_ACTION_NONE) {
+                return COMMAND_ACTION_CANCEL;    
+            }
         }
     }
     return COMMAND_ACTION_QUIT;

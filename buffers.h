@@ -6,6 +6,6 @@
 
 extern char scratch_buffer[];
 extern char filename[];
-extern char tmpfilename[];
+extern char tmpbuffer[];
 
 #endif //BUFFERS_H_
