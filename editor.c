@@ -11,12 +11,12 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.1b"
+#define VERSION "0.1c"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
 
-#define LINES SCREEN_HEIGHT-4
+#define LINES SCREEN_HEIGHT-5
 #define COLS 80
 
 #define TEXT_BUFFER_SIZE 22528
@@ -55,6 +55,7 @@ typedef struct {
     int mark_start;         // start of marked text (-1 if none)
     uint8_t dirty;          // dirty flag
     uint8_t extend_kbd;     // indicates if extended keyboard is used
+    uint8_t file_too_large; // indicates that the file is too large (disable save)
     RedrawMode redraw_mode; // what to redraw
     EditorMode mode;        // current editor mode
 } EditorState;
@@ -163,7 +164,6 @@ void editor_update_mark(EditorState* editor) {
         ++editor->mark_start; 
         --marklen;        
     }
-    
 }
 
 /*
@@ -448,6 +448,15 @@ void editor_draw(EditorState* editor) {
     editor->redraw_mode = REDRAW_NONE;
 }
 
+void editor_message(const char* msg) {
+    uint8_t ox, oy;
+    get_cursor_pos(&ox, &oy);
+    set_cursor_pos(0, LINES);
+    print("%s", msg);
+    clreol();
+    set_cursor_pos(ox, oy);
+}
+
 void editor_print_hotkey(EditorState* editor, const char* short_cut_key, const char* description, int force_active) {
     int len = HOTKEY_ITEM_WIDTH - (strlen(short_cut_key) + strlen(description));
     if (editor->mode == EDITOR_MODE_COMMAND || force_active) highlight();
@@ -461,9 +470,18 @@ void editor_update_hotkeys(EditorState* editor) {
     commands[1].description = editor->extend_kbd ? "On" : "Off";
 }
 
+void editor_update_filename(EditorState* editor) {
+    set_cursor_pos(0, SCREEN_HEIGHT - 1);
+    highlight();
+    print("Filename: %s%c", editor->filename ? editor->filename : "Untitled", editor->dirty ? '*' : ' ');
+    standard();
+    clreol();
+}
+
 void editor_update_status(EditorState* editor, char key) {
     static EditorMode lastmode = EDITOR_MODE_NONE;
     static uint8_t lastextkbd = 0;
+    static uint8_t wasdirty = 0;
 
     int total = editor_length(editor);
 
@@ -482,19 +500,16 @@ void editor_update_status(EditorState* editor, char key) {
         }   
         print("Version: %s", VERSION);
         lastmode = editor->mode;
-        lastextkbd = editor->extend_kbd;           
+        lastextkbd = editor->extend_kbd;   
+        
+        if (editor->file_too_large) editor_message("File too large, save is disabled");        
     }
 
-    set_cursor_pos(0, SCREEN_HEIGHT - 1);
-    highlight();
-    print("Filename: %s%c", editor->filename ? editor->filename : "Untitled", editor->dirty ? '*' : ' ');
-    standard();
-    uint8_t sx, sy;
-    get_cursor_pos(&sx, &sy); (sy);
-    while (sx < SCREEN_WIDTH - 36) {
-        ++sx;
-        putch(' ');
+    if(wasdirty != editor->dirty) {
+        editor_update_filename(editor);
+        wasdirty = editor->dirty;
     }
+    set_cursor_pos(45, SCREEN_HEIGHT - 1);    
     print("Mem: %d Ln %d, Col %d Key: %d", TEXT_BUFFER_SIZE - total, cursor_row + 1, cursor_col + 1, key);
     clreol();
     set_cursor_pos(ox, oy);
@@ -518,15 +533,6 @@ void editor_redraw(EditorState* editor) {
         editor_get_cursor_position(editor, &cursor_row, &cursor_col);
         update_hardware_cursor(editor, cursor_col, cursor_row);
     }
-}
-
-void editor_message(const char* msg) {
-    uint8_t ox, oy;
-    get_cursor_pos(&ox, &oy);
-    set_cursor_pos(0, LINES);
-    print("%s", msg);
-    clreol();
-    set_cursor_pos(ox, oy);
 }
 
 // Edit a line of text restricting to the given alphabet.
@@ -607,6 +613,8 @@ CommandAction editor_toggle_extend(EditorState* editor) {
 }
 
 int editor_save_file(EditorState* editor) {
+    if (editor->file_too_large) return 0;
+
     char buf[32];
 #ifdef __ZXNEXT
     errno = 0;
@@ -647,14 +655,18 @@ void editor_init_file(EditorState* editor, const char* filepath) {
         errno = 0;
         char f = esxdos_f_open(filename, ESXDOS_MODE_R | ESXDOS_MODE_OE);
         if (!errno) {
-            size_t len = esxdos_f_read(f, editor->buffer, TEXT_BUFFER_SIZE);
-            if (len > 0) {
-                char* src = (char*)(editor->buffer + len);
-                char* dst = (char*)(editor->buffer + TEXT_BUFFER_SIZE);
-                size_t bytescopied = 0;
+            size_t bytes_read = esxdos_f_read(f, editor->buffer, TEXT_BUFFER_SIZE);                
+            
+            editor->file_too_large = (bytes_read == TEXT_BUFFER_SIZE);
+            if (bytes_read > 0) {
+                char *start = &editor->buffer[0];
+
+                char* src = (char*)(start + bytes_read-1);
+                char* dst = (char*)(start + TEXT_BUFFER_SIZE-1);
+                uint16_t bytescopied = 0;
                 char skip_eol_char = 0;
-                char lead_eol_char = 0;
-                while (src >= &editor->buffer[0]) {
+                char lead_eol_char = 0;                
+                while (src >= start) {
                     char ch = *src;
                     if (!skip_eol_char) {
                         switch(ch) {
@@ -668,20 +680,27 @@ void editor_init_file(EditorState* editor, const char* filepath) {
                             break;
                         }                    
                     }
-                    if (ch == '\t') {
+                    if (ch == '\t') {  
+                        if (dst-2 < start) {
+                            editor->file_too_large = 1;
+                            break;
+                        }
                         *dst-- = ' ';
                         *dst-- = ' ';
-                        bytescopied += 2;
-                    }
-                    else if (ch != skip_eol_char) {
-                        if (lead_eol_char && ch == lead_eol_char) ch = NL;
+                        bytescopied += 2;                        
+                    } else if (ch != skip_eol_char) {                    
+                        if (dst-1 < start) {
+                            editor->file_too_large = 1;
+                            break;
+                        }
+                        if (lead_eol_char && ch == lead_eol_char) ch = NL;                        
                         *dst-- = ch;
                         ++bytescopied;
                     }
                     --src;
-                }
+                }                
                 editor->gap_start = 0;
-                editor->gap_end = TEXT_BUFFER_SIZE - bytescopied + 1;
+                editor->gap_end = TEXT_BUFFER_SIZE - bytescopied;
             }
             esxdos_f_close(f);
         }
@@ -690,6 +709,8 @@ void editor_init_file(EditorState* editor, const char* filepath) {
 }
 
 CommandAction editor_save(EditorState* editor) {
+    if (editor->file_too_large) return 0;
+
     set_cursor_pos(0, LINES);
 
     if (!edit_line("File name", NULL, filename, MAX_FILENAME_LEN))
@@ -706,6 +727,7 @@ CommandAction editor_save(EditorState* editor) {
     editor->dirty = 0;
     editor->mode = EDITOR_MODE_EDIT;
     editor->redraw_mode = REDRAW_CURSOR;
+    editor_update_filename(editor);
     return COMMAND_ACTION_NONE;
 }
 
@@ -820,7 +842,7 @@ CommandAction editor_goto(EditorState* editor) {
 }
 
 CommandAction editor_quit(EditorState* editor) {
-    if (editor->dirty) {
+    if (editor->dirty && !editor->file_too_large) {
         set_cursor_pos(0, LINES);
         print("File modified. Save? (y/n) ");
         char ch = getch();
@@ -850,6 +872,7 @@ void edit(const char* filepath) {
     editor.dirty = 0;
     editor.mark_start = -1;
     editor.extend_kbd = 0;
+    editor.file_too_large = 0;
     editor.redraw_mode = REDRAW_ALL;
 
     filename[0] = '\0';
@@ -862,9 +885,11 @@ void edit(const char* filepath) {
 
     int ch = 0;
     cls();
+    editor_update_filename(&editor);
     while (1) {
         editor_redraw(&editor);
         editor_update_status(&editor, ch);
+    
         ch = getch();
 
         switch (ch) {
