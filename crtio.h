@@ -13,6 +13,7 @@
 #define KEY_UP          0x0b
 #define KEY_DOWN        0x0a
 #define KEY_BACKSPACE   0x0c
+#define KEY_ENTER       0x0d
 #define KEY_EXTEND      0x0e
 #define KEY_MARK        0x2e
 #define KEY_PASTE       0x2f

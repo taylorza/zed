@@ -33,6 +33,8 @@ KeyMapEntry keymap[] = {
 char * const screen = (char *)START_MAP;
 
 uint8_t old_reg_6b;
+uint8_t old_reg_15;
+uint8_t old_border;
 
 uint8_t cx = 0;         // caret X
 uint8_t cy = 0;         // caret Y
@@ -54,6 +56,9 @@ void screen_init(void) {
     cx = 0;
     cy = 0;
     old_reg_6b = ZXN_READ_REG(0x6b);
+    old_reg_15 = ZXN_READ_REG(0x15);
+    old_border = ((*(uint8_t*)(0x5c48)) & 0b00111000) >> 3;
+
     zx_border(1);
     // Sprite palette
     ZXN_NEXTREG(0x43, 0b00100000);      // Sprite palette 1 auto increment
@@ -97,7 +102,9 @@ void screen_init(void) {
 
 void screen_restore(void) {
     memset((void*)START_MAP, 0, 6144);
-    ZXN_NEXTREGA(0x6b, old_reg_6b);   
+    ZXN_NEXTREGA(0x6b, old_reg_6b);
+    ZXN_NEXTREGA(0x15, old_reg_15);
+    zx_border(old_border);
 }
 
 void cls(void) {
