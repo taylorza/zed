@@ -121,7 +121,7 @@ void putch(char ch) {
         cx=0;
         return;
     }
-    if (ch < 32 || ch > 128) return;
+    if (ch < 32 || ch > 128) ch=128;
 
     if (cx > SCREEN_WIDTH-1) {
         cx = 0;
