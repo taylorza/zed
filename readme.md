@@ -48,6 +48,7 @@ Standard navigation
 Extended navigation
 
 |Key|Action|
+|---|------|
 |`SYMBOL SHIFT` + `⇦`|Move left one word|
 |`SYMBOL SHIFT` + `⇨`|Move right one word|
 |`SYMBOL SHIFT` + `⇧`|Page up|
