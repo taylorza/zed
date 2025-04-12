@@ -11,7 +11,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.1c"
+#define VERSION "0.1d"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
@@ -20,6 +20,7 @@
 #define COLS 80
 
 #define TEXT_BUFFER_SIZE 22528
+
 char text_buffer[TEXT_BUFFER_SIZE];
 
 typedef enum RedrawMode {
@@ -29,17 +30,13 @@ typedef enum RedrawMode {
     REDRAW_CURSOR,
 } RedrawMode;
 
-typedef enum EditorMode {
-    EDITOR_MODE_NONE,
-    EDITOR_MODE_EDIT,
-    EDITOR_MODE_COMMAND,
-} EditorMode;
-
 typedef enum CommandAction {
     COMMAND_ACTION_NONE,
-    COMMAND_ACTION_FAILED,
     COMMAND_ACTION_QUIT,
+    COMMAND_ACTION_FAILED,
     COMMAND_ACTION_CANCEL,
+    COMMAND_ACTION_YES,
+    COMMAND_ACTION_NO,
 } CommandAction;
 
 typedef struct {
@@ -54,10 +51,8 @@ typedef struct {
     int cursor_col;         // current cursor column (in the gap buffer)
     int mark_start;         // start of marked text (-1 if none)
     uint8_t dirty;          // dirty flag
-    uint8_t extend_kbd;     // indicates if extended keyboard is used
     uint8_t file_too_large; // indicates that the file is too large (disable save)
-    RedrawMode redraw_mode; // what to redraw
-    EditorMode mode;        // current editor mode
+    RedrawMode redraw_mode; // what to redraw    
 } EditorState;
 
 typedef struct {
@@ -67,8 +62,6 @@ typedef struct {
     CommandAction(*action)(EditorState* editor);
 } Command;
 
-CommandAction editor_toggle_mode(EditorState* editor);
-CommandAction editor_toggle_extend(EditorState* editor);
 CommandAction editor_save(EditorState* editor);
 CommandAction editor_mark(EditorState* editor);
 CommandAction editor_copy(EditorState* editor);
@@ -79,8 +72,6 @@ CommandAction editor_goto(EditorState* editor);
 CommandAction editor_quit(EditorState* editor);
 
 Command commands[] = {
-    {"ESC", "Edit", KEY_ESC, editor_toggle_mode},
-    {"EXT", "Off", KEY_EXTEND, editor_toggle_extend},
     {"^S", "Save", KEY_SAVE, editor_save},
     {"^M", "Mark", KEY_MARK, editor_mark},
     {"^C", "Copy", KEY_COPY, editor_copy},
@@ -91,6 +82,10 @@ Command commands[] = {
     {"^Q", "Quit", KEY_QUIT, editor_quit},
     {NULL, NULL, 0, NULL}
 };
+
+uint8_t is_whitespace(char c) {
+    return c == ' ' || c == NL;
+}
 
 /* Returns the logical length (number of characters) of the text. */
 int editor_length(EditorState* editor) {
@@ -240,6 +235,45 @@ void editor_move_right(EditorState* editor) {
 void editor_move_cursor_to(EditorState* editor, int pos) {
     while (editor->gap_start > pos) editor_move_left(editor);
     while (editor->gap_start < pos) editor_move_right(editor);
+}
+
+/*
+ * Reposition the gap to the next character after a space
+ */
+void editor_move_word(EditorState* editor, int8_t direction) {
+    int pos = editor->gap_start;
+    int len = editor_length(editor);
+
+    if (direction > 0) {
+        // if in the middle of a word move to the end
+        while (pos < len && !is_whitespace(editor_get_char(editor, pos))) {
+            ++pos;
+        }
+        // move to the start of the next word
+        while (pos < len && is_whitespace(editor_get_char(editor, pos))) {
+            ++pos;
+        }
+    } else if (direction < 0 && pos > 0) {
+        // If left character is not a space move left until we hit a space
+        // at the begining of the current word
+        if (pos > 0 && !is_whitespace(editor_get_char(editor, pos-1))) {
+            while (pos > 0 && !is_whitespace(editor_get_char(editor, pos-1))) {
+                --pos;
+            }
+        } else {
+            // If we are in a white space region move left past the white space
+            while(pos > 0 && is_whitespace(editor_get_char(editor, pos-1))) {
+                --pos;
+            }
+            // then move left through the previous work
+            while (pos > 0 && !is_whitespace(editor_get_char(editor, pos-1))) {
+                --pos;
+            }
+        }
+    }
+
+    // Finally updat the cursor to the new possition
+    editor_move_cursor_to(editor, pos);
 }
 
 /*
@@ -414,6 +448,9 @@ void editor_draw(EditorState* editor) {
     set_cursor_pos(0, 0);
     int row;
     int col_offset = editor->col_offset;
+
+    if (editor->mark_start != -1) editor_update_mark(editor);
+    
     for (row = 0; row < LINES - 1 && i < total; ++row, ++i) {
         for (int col = 0; i < total; ++col, ++i) {
             char c = editor_get_char(editor, i);
@@ -424,7 +461,7 @@ void editor_draw(EditorState* editor) {
             }
 
             if (col >= col_offset && col < COLS + col_offset) {
-                if (editor->mark_start != -1) {
+                if (editor->mark_start != -1) {                    
                     if ((editor->mark_start < editor->gap_start && i >= editor->mark_start && i < editor->gap_start) ||
                         (editor->mark_start > editor->gap_start && i >= editor->gap_start && i < editor->mark_start))
                         highlight();
@@ -436,6 +473,10 @@ void editor_draw(EditorState* editor) {
         }
         if (i == total) clreol();
     }
+    // Standard attribute, needed when the marker runs to the end 
+    // of the file and therefore does not reset
+    standard(); 
+
     // If we reached the end of the text, fill the rest of the screen with blank lines.
     while (row++ < LINES) {
         clreol();
@@ -457,19 +498,6 @@ void editor_message(const char* msg) {
     set_cursor_pos(ox, oy);
 }
 
-void editor_print_hotkey(EditorState* editor, const char* short_cut_key, const char* description, int force_active) {
-    int len = HOTKEY_ITEM_WIDTH - (strlen(short_cut_key) + strlen(description));
-    if (editor->mode == EDITOR_MODE_COMMAND || force_active) highlight();
-    print(short_cut_key); standard();
-    print(" %s", description);
-    while (len-- > 0) putch(' ');
-}
-
-void editor_update_hotkeys(EditorState* editor) {
-    commands[0].description = editor->mode == EDITOR_MODE_COMMAND ? "Command" : "Edit";
-    commands[1].description = editor->extend_kbd ? "On" : "Off";
-}
-
 void editor_update_filename(EditorState* editor) {
     set_cursor_pos(0, SCREEN_HEIGHT - 1);
     highlight();
@@ -478,11 +506,26 @@ void editor_update_filename(EditorState* editor) {
     clreol();
 }
 
-void editor_update_status(EditorState* editor, char key) {
-    static EditorMode lastmode = EDITOR_MODE_NONE;
-    static uint8_t lastextkbd = 0;
-    static uint8_t wasdirty = 0;
+void editor_print_hotkey(const char* short_cut_key, const char* description) {
+    int len = HOTKEY_ITEM_WIDTH - (strlen(short_cut_key) + strlen(description));
+    highlight();print(short_cut_key); standard();
+    print(" %s", description);
+    while (len-- > 0) putch(' ');
+}
 
+void editor_show_hotkeys(EditorState* editor) {
+    set_cursor_pos(0, LINES + 1);
+    int i = 0;
+    for (Command* cmd = &commands[0]; cmd->short_cut_key != NULL; ++cmd) {
+        editor_print_hotkey(cmd->short_cut_key, cmd->description);
+        if (++i % HOTKEY_ITEMS_PER_LINE == 0) putch(NL);
+    }
+    print("Version: %s", VERSION);
+    if (editor->file_too_large) editor_message("File too large, save is disabled");
+}
+
+void editor_update_status(EditorState* editor, char key) {
+    static uint8_t wasdirty = 0;
     int total = editor_length(editor);
 
     int cursor_row, cursor_col;
@@ -490,24 +533,9 @@ void editor_update_status(EditorState* editor, char key) {
     get_cursor_pos(&ox, &oy);
     editor_get_cursor_position(editor, &cursor_row, &cursor_col);
 
-    if (editor->mode != lastmode || editor->extend_kbd != lastextkbd) {
-        editor_update_hotkeys(editor);
-        set_cursor_pos(0, LINES + 1);
-        int i = 0;
-        for (Command* cmd = &commands[0]; cmd->short_cut_key != NULL; ++cmd) {
-            editor_print_hotkey(editor, cmd->short_cut_key, cmd->description, i < 2);
-            if (++i % HOTKEY_ITEMS_PER_LINE == 0) putch(NL);
-        }
-        print("Version: %s", VERSION);
-        lastmode = editor->mode;
-        lastextkbd = editor->extend_kbd;
-
-        if (editor->file_too_large) editor_message("File too large, save is disabled");
-    }
-
     if (wasdirty != editor->dirty) {
-        editor_update_filename(editor);
         wasdirty = editor->dirty;
+        editor_update_filename(editor);        
     }
     set_cursor_pos(45, SCREEN_HEIGHT - 1);
     print("Mem: %d Ln %d, Col %d Key: %d", TEXT_BUFFER_SIZE - total, cursor_row + 1, cursor_col + 1, key);
@@ -533,6 +561,24 @@ void editor_redraw(EditorState* editor) {
         editor_get_cursor_position(editor, &cursor_row, &cursor_col);
         update_hardware_cursor(editor, cursor_col, cursor_row);
     }
+}
+
+CommandAction confirm(const char *prompt) {
+    CommandAction retval;
+
+    set_cursor_pos(0, LINES);
+    print("%s (y/n) ", prompt);
+    char ch = getch();
+    
+    switch(ch) {
+        case 'Y':
+        case 'y': retval = COMMAND_ACTION_YES; break;
+        case KEY_ESC: retval  = COMMAND_ACTION_CANCEL; break;
+        default: retval = COMMAND_ACTION_NO; break;
+    }
+    set_cursor_pos(0, LINES);
+    clreol();
+    return retval;
 }
 
 // Edit a line of text restricting to the given alphabet.
@@ -571,12 +617,19 @@ uint8_t edit_line(const char* prompt, const char* alphabet, char* buffer, uint8_
                 }
                 redraw = 1;
                 break;
+            case KEY_LEFT:
+                if (i > 0) --i;
+                break;
+            case KEY_RIGHT:
+                if (i < len) ++i;
+                break;
             case KEY_ENTER:
                 retval = 1;
                 break;
             default:
-                if (i < maxlen && ch >= 32 && ch <= 128) {
+                if (len < maxlen && ch >= 32 && ch <= 128) {
                     if (!alphabet || strchr(alphabet, ch)) {
+                        memmove(buffer+i+1, buffer+i, len-i);
                         buffer[i++] = ch;
                         if (i > len) buffer[i] = '\0';
                         ++len;
@@ -589,27 +642,6 @@ uint8_t edit_line(const char* prompt, const char* alphabet, char* buffer, uint8_
     set_cursor_pos(ox, oy);
     clreol();
     return retval;
-}
-
-CommandAction editor_toggle_mode(EditorState* editor) {
-    if (editor->mode == EDITOR_MODE_EDIT) {
-        editor->mode = EDITOR_MODE_COMMAND;
-        editor->redraw_mode = REDRAW_NONE;
-        editor->extend_kbd = 0;
-    }
-    else {
-        editor->mode = EDITOR_MODE_EDIT;
-        editor->mark_start = -1;
-        editor->redraw_mode = REDRAW_ALL;
-    }
-    return COMMAND_ACTION_NONE;
-}
-
-CommandAction editor_toggle_extend(EditorState* editor) {
-    if (editor->mode == EDITOR_MODE_COMMAND) return COMMAND_ACTION_NONE;
-    editor->extend_kbd ^= 1;
-    editor->redraw_mode = REDRAW_NONE;
-    return COMMAND_ACTION_NONE;
 }
 
 int editor_save_file(EditorState* editor) {
@@ -710,8 +742,9 @@ void editor_init_file(EditorState* editor, const char* filepath) {
 }
 
 CommandAction editor_save(EditorState* editor) {
-    if (editor->file_too_large) return 0;
-
+    if (editor->file_too_large) return COMMAND_ACTION_NONE;
+    
+    editor->redraw_mode = REDRAW_CURSOR;
     set_cursor_pos(0, LINES);
 
     if (!edit_line("File name", NULL, filename, MAX_FILENAME_LEN))
@@ -728,8 +761,6 @@ CommandAction editor_save(EditorState* editor) {
     }
 
     editor->dirty = 0;
-    editor->mode = EDITOR_MODE_EDIT;
-    editor->redraw_mode = REDRAW_CURSOR;
     editor_update_filename(editor);
     return COMMAND_ACTION_NONE;
 }
@@ -744,32 +775,39 @@ CommandAction editor_mark(EditorState* editor) {
     return COMMAND_ACTION_NONE;
 }
 
-CommandAction editor_copy(EditorState* editor) {
-    if (editor->mark_start == -1) return COMMAND_ACTION_NONE;
+void editor_cutcopy(EditorState* editor, uint8_t cut) {
+    if (editor->mark_start == -1) return;
 
     int start = editor->mark_start < editor->gap_start ? editor->mark_start : editor->gap_start;
     int end = editor->mark_start > editor->gap_start ? editor->mark_start : editor->gap_start;
     int len = end - start;
+
+    // Copy marked text
     for (int i = 0; i < len && i < SCRATCH_BUFFER_SIZE; ++i) {
         scratch_buffer[i] = editor_get_char(editor, start + i);
     }
     scratch_buffer[len] = '\0';
+
+    if (cut) {
+        // Cut marked text by deleting character by character from
+        // the end of the marker to the begining
+        editor_move_cursor_to(editor, end);
+        for (int i = 0; i < len; ++i) {
+            editor_backspace(editor);
+        }
+    }
+
+    editor->mark_start = -1;
+    editor->redraw_mode = REDRAW_ALL;
+}
+
+CommandAction editor_copy(EditorState* editor) {
+    editor_cutcopy(editor, 0);
     return COMMAND_ACTION_NONE;
 }
 
 CommandAction editor_cut(EditorState* editor) {
-    if (editor->mark_start == -1) return COMMAND_ACTION_NONE;
-
-    editor_copy(editor);
-
-    int start = editor->mark_start < editor->gap_start ? editor->mark_start : editor->gap_start;
-    int end = editor->mark_start > editor->gap_start ? editor->mark_start : editor->gap_start;
-    int len = end - start;
-    editor_move_cursor_to(editor, end);
-    for (int i = 0; i < len; ++i) {
-        editor_backspace(editor);
-    }
-    editor->redraw_mode = REDRAW_ALL;
+    editor_cutcopy(editor, 1);
     return COMMAND_ACTION_NONE;
 }
 
@@ -805,25 +843,23 @@ int editor_search(EditorState* editor, const char* str, int start) {
 CommandAction editor_find(EditorState* editor) {
     static char input[32] = { 0 };
     set_cursor_pos(0, LINES);
-    if (edit_line("Find", NULL, input, sizeof(input))) {
+    while (edit_line("Find", NULL, input, sizeof(input))) {
         int len = strlen(input);
         int total = editor_length(editor);
 
         int i = editor_search(editor, input, editor->gap_start);
-        if (i != -1) {
-            editor->mark_start = i;
-            editor_move_cursor_to(editor, i + len);
-            editor->redraw_mode = REDRAW_ALL;
-            return COMMAND_ACTION_NONE;
-        }
+        if (i == -1) i = editor_search(editor, input, 0);
 
-        i = editor_search(editor, input, 0);
         if (i != -1) {
             editor->mark_start = i;
             editor_move_cursor_to(editor, i + len);
             editor->redraw_mode = REDRAW_ALL;
+            editor_redraw(editor);
         }
+        set_cursor_pos(0, LINES);
     }
+    editor->mark_start = -1;
+    editor->redraw_mode = REDRAW_CURSOR;
     return COMMAND_ACTION_NONE;
 }
 
@@ -845,17 +881,24 @@ CommandAction editor_goto(EditorState* editor) {
 }
 
 CommandAction editor_quit(EditorState* editor) {
+    editor->redraw_mode = REDRAW_CURSOR;
     if (editor->dirty && !editor->file_too_large) {
-        set_cursor_pos(0, LINES);
-        print("File modified. Save? (y/n) ");
-        char ch = getch();
-        if (ch == 'y' || ch == 'Y') {
-            if (editor_save(editor) != COMMAND_ACTION_NONE) {
-                return COMMAND_ACTION_CANCEL;
-            }
-        }
+        CommandAction action = confirm("File modified. Save?");
+        switch(action) {
+            case COMMAND_ACTION_YES:        
+                if (editor_save(editor) != COMMAND_ACTION_NONE) {
+                    return COMMAND_ACTION_NONE;
+                }
+                break;
+            case COMMAND_ACTION_CANCEL:
+                return COMMAND_ACTION_NONE;
+        }                
+        return COMMAND_ACTION_QUIT;                                    
+    } else if (confirm("Quit?") == COMMAND_ACTION_YES) {
+        return COMMAND_ACTION_QUIT;        
     }
-    return COMMAND_ACTION_QUIT;
+
+    return COMMAND_ACTION_NONE;
 }
 
 void edit(const char* filepath) {
@@ -871,10 +914,8 @@ void edit(const char* filepath) {
     editor.top_row_index = 0;
     editor.cursor_row = 0;
     editor.cursor_col = 0;
-    editor.mode = EDITOR_MODE_EDIT;
     editor.dirty = 0;
     editor.mark_start = -1;
-    editor.extend_kbd = 0;
     editor.file_too_large = 0;
     editor.redraw_mode = REDRAW_ALL;
 
@@ -886,63 +927,72 @@ void edit(const char* filepath) {
         editor_init_file(&editor, filepath);
     }
 
-    int ch = 0;
+    char ch = 0;
     cls();
+    editor_show_hotkeys(&editor);
     editor_update_filename(&editor);
     while (1) {
         editor_redraw(&editor);
         editor_update_status(&editor, ch);
 
         ch = getch();
-
         switch (ch) {
+            case KEY_WORDLEFT:
+                editor_move_word(&editor, -1);
+                break;
+            case KEY_WORDRIGHT:
+                editor_move_word(&editor, 1);
+                break;
             case KEY_LEFT:
                 editor_move_left(&editor);
                 break;
             case KEY_RIGHT:
                 editor_move_right(&editor);
                 break;
-            case KEY_UP:
-                for (int i = 0; i < 1 + ((LINES - 2) * editor.extend_kbd); ++i)
+            case KEY_PAGEUP:
+                for (int i = 0; i < LINES - 2; ++i)
                     editor_move_up(&editor);
                 break;
-            case KEY_DOWN:
-                for (int i = 0; i < 1 + ((LINES - 2) * editor.extend_kbd); ++i)
+            case KEY_UP:
+                editor_move_up(&editor);
+                break;
+            case KEY_PAGEDOWN:
+                for (int i = 0; i < LINES - 2; ++i)
                     editor_move_down(&editor);
                 break;
+            case KEY_DOWN:                
+                editor_move_down(&editor);
+                break;            
             default:
-                if (ch == KEY_EXTEND || ch == KEY_ESC || editor.mode == EDITOR_MODE_COMMAND) {
-                    for (Command* cmd = (Command*)commands; cmd->short_cut_key != NULL; ++cmd) {
-                        if (ch == cmd->key) {
-                            if (cmd->action) {
-                                CommandAction action = cmd->action(&editor);
-                                switch (action) {
-                                    case COMMAND_ACTION_QUIT:
-                                        return;
+                switch (ch) {
+                    case KEY_BACKSPACE:
+                        editor_backspace(&editor);
+                        break;
+                    case KEY_TAB:
+                        editor_insert_tab(&editor);
+                        break;
+                    case KEY_ENTER:
+                        editor_insert(&editor, NL);
+                        break;
+                    default:
+                        if (ch >= 32 && ch <= 127) {
+                            editor_insert(&editor, (char)ch);
+                        } else {
+                            for (Command* cmd = (Command*)commands; cmd->short_cut_key != NULL; ++cmd) {
+                                if (ch == cmd->key) {
+                                    if (cmd->action) {
+                                        CommandAction action = cmd->action(&editor);
+                                        switch (action) {
+                                            case COMMAND_ACTION_QUIT:
+                                                return;
+                                        }
+                                    }
+                                    break;
                                 }
-                            }
-                            break;
+                            }                            
                         }
-                    }
-                }
-                else {
-                    switch (ch) {
-                        case KEY_BACKSPACE:
-                            editor_backspace(&editor);
-                            break;
-                        case KEY_TAB:
-                            editor_insert_tab(&editor);
-                            break;
-                        case KEY_ENTER:
-                            editor_insert(&editor, NL);
-                            break;
-                        default:
-                            if (ch >= 32 && ch <= 128) {
-                                editor_insert(&editor, (char)ch);
-                            }
-                            break;
-                    }
-                }
+                        break;
+                    }                
         }
     }
 }

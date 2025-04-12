@@ -8,29 +8,61 @@
 #include "font.h"
 #include "crtio.h"
 
+#define REPEAT_DELAY 20
+#define REPEAT_RATE  2
+
 #define START_BANKS     0x4000
 #define START_MAP       0x4000
 #define START_TILE_DEF  0x5400      // After 80x32 timemap with attributes
 #define OFFSET_MAP      ((START_MAP - START_BANKS) >> 8)
 #define OFFSET_TILES    ((START_TILE_DEF - START_BANKS) >> 8)
 
-typedef struct KeyMapEntry {
-    uint8_t code;
-    uint8_t alt;
-} KeyMapEntry;
-
-KeyMapEntry keymap[] = {
-    {.code = 0xc3, .alt = 0x7c}, // '|'
-    {.code = 0xc5, .alt = 0x5d}, // ']'
-    {.code = 0xc6, .alt = 0x5b}, // '['
-    {.code = 0xcb, .alt = 0x7d}, // '}'
-    {.code = 0xcc, .alt = 0x7b}, // '{'
-    {.code = 0xcd, .alt = 0x5c}, // '\'
-    {.code = 0xe2, .alt = 0x7e}, // '~'
-    
+extern uint8_t kbstate[];
+const uint8_t unshifted [] = {
+    'a','s','d','f','g',
+    'q','w','e','r','t',
+    '1','2','3','4','5',
+    '0','9','8','7','6',
+    'p','o','i','u','y',
+    0x0d,'l','k','j','h',
+    ' ',0xff,'m','n','b',
+    0xff,'z','x','c','v',
 };
 
-char * const screen = (char *)START_MAP;
+const uint8_t caps [] = {
+    'A','S','D','F','G',
+    'Q','W','E','R','T',
+    0x01,0x02,0x03,0x04,0x05,
+    0x0a,0x09,0x08,0x07,0x06,
+    'P','O','I','U','Y',
+    0x1d,'L','K','J','H',
+    0x1b,0xff,'M','N','B',
+    0xff,'Z','X','C','V',
+};
+
+const uint8_t sym[] = {
+    '~','|','\\','{', '}',
+    0x7f,0x10,0x11,'<','>',
+    '!','@','#','$','%',
+    '_',')','(',0x27,'&',
+    0x22,';',0x12,']','[',
+    0x1e,'=','+','-','^',
+    0x1c,0xff,'.',',','*',
+    0xff,':','`','?','/',
+};
+
+const uint8_t ext[] = {
+    'a'|0x80,'s'|0x80,'d'|0x80,'f'|0x80,'g'|0x80,
+    'q'|0x80,'w'|0x80,'e'|0x80,'r'|0x80,'t'|0x80,
+    '1'|0x80,'2'|0x80,'3'|0x80,'4'|0x80,'5'|0x80,
+    '0'|0x80,'9'|0x80,'8'|0x80,'7'|0x80,'6'|0x80,
+    'p'|0x80,'o'|0x80,'i'|0x80,'u'|0x80,'y'|0x80,
+    0x8d,    'l'|0x80,'k'|0x80,'j'|0x80,'h'|0x80,
+    0xa0,    0xff,    'm'|0x80,'n'|0x80,'b'|0x80,
+    0xff,    'z'|0x80,'x'|0x80,'c'|0x80,'v'|0x80,
+};
+
+char * const screen = (char * const)START_MAP;
 
 uint8_t old_reg_6b;
 uint8_t old_reg_15;
@@ -47,6 +79,8 @@ uint8_t caret_state[] = {
     0b01000000,     // 0x38 - Visible, Enable Attr-4
     0b10000000,     // 0x39 - 4-bit sprite, Y9
 };
+
+extern void kbd_scan(void);
 
 extern void setup_caret_sprite(void);
 void position_caret(void);
@@ -102,6 +136,7 @@ void screen_init(void) {
 
 void screen_restore(void) {
     memset((void*)START_MAP, 0, 6144);
+    hide_caret();
     ZXN_NEXTREGA(0x6b, old_reg_6b);
     ZXN_NEXTREGA(0x15, old_reg_15);
     zx_border(old_border);
@@ -153,6 +188,58 @@ void print(const char *fmt, ...) {
     }
 }
 
+char kbhandler(void) {
+    kbd_scan();
+    
+    uint8_t shift = (uint8_t)((kbstate[7] & 1) | (kbstate[6] & 2));
+    
+    const uint8_t *tbl = unshifted;    
+    if (shift == 1) tbl = caps;
+    else if (shift == 2) tbl = sym;
+    else if (shift == 3) tbl = ext;
+
+    // Switch off the shift flags
+    kbstate[6] &= 0xfd;
+    kbstate[7] &= 0xfe;
+    
+    for (uint8_t i=0; i<8; ++i, tbl += 5) {
+        uint8_t c = kbstate[i];
+        if (!c) continue;
+        for (uint8_t j=0; c; c >>= 1, ++j) {
+            if (c & 1) return tbl[j];                                        
+        }
+    } 
+    return 0;  
+}
+
+char getch(void) {
+    static char lastkey = 0;
+    static uint8_t repeating = 0;
+    static uint8_t repeat_delay = 0;
+    position_caret();
+    for(;;) {
+        __asm__("halt");
+        toggle_caret();
+        char key = kbhandler();
+        if (!key) {
+            lastkey = 0;
+            repeating = 0;
+            continue;
+        }
+        if (key != lastkey) {
+            lastkey = key;
+            repeat_delay = 0;
+            return key;
+        } else {
+            ++repeat_delay;
+            if (repeat_delay < REPEAT_DELAY) continue;
+            if (repeat_delay < REPEAT_DELAY+REPEAT_RATE) continue;
+            repeat_delay = REPEAT_DELAY;
+            return key;
+        }
+    }  
+}
+/*
 char getch(void) {
     char *lastk = (char*)0x5c08;
     position_caret();
@@ -172,7 +259,7 @@ char getch(void) {
     }
     return ch;
 }
-
+*/
 void position_caret(void) {
     uint16_t x = cx * 4;
     uint16_t y = cy * 8;

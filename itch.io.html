@@ -2,75 +2,72 @@
 <hr>
 <h2 id="installing-the-editor">Installing the editor</h2>
 <p>The editor is a DOT command, the recommended installation method is to copy the ZED binary file to the DOT folder located in the root of your Next OS SD card.</p>
+<p>The latest binary can be downloaded from <a href="https://taylorza.itch.io/zed">itch.io</a></p>
 <hr>
 <h2 id="starting-the-editor">Starting the editor</h2>
 <p>Once installed you can launch the editor in one of two ways.</p>
 <h3 id="1-launch-without-a-file">1. Launch without a file</h3>
 <p>Starts a new document and prompt for a file name when you either save or exit and choose to save the file.</p>
-<pre>
-<code class="lang-bash">.zed
+<pre><code class="language-bash">.zed
 </code></pre>
 <h3 id="2-launch-with-a-filename-passed-at-the-command-line">2. Launch with a filename passed at the Command Line</h3>
 <p>If the specified file exists, it will be loaded into the editor. Otherwise, a new document will be created with the filename prefilled.</p>
-<pre>
-<code class="lang-bash">.zed readme.txt
+<pre><code class="language-bash">.zed readme.txt
 </code></pre>
 <hr>
 <h2 id="editing-files">Editing files</h2>
 <p>After launching, you can immediately start editing. Use the cursor/arrow keys for navigation as expected.</p>
-<h3 id="paging-through-large-documents">Paging through large documents</h3>
-<p>The extended keyboard mode enables you to page through the document rather than moving up and down one line at a time.</p>
+<h3 id="editor-keys">Editor keys</h3>
+<p>Standard navigation</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>⇦</code></td>
+<td>Move left one character</td>
+</tr>
+<tr>
+<td><code>⇨</code></td>
+<td>Move right one character</td>
+</tr>
+<tr>
+<td><code>⇧</code></td>
+<td>Move up one line</td>
+</tr>
+<tr>
+<td><code>⇩</code></td>
+<td>Move down one line</td>
+</tr>
+</tbody>
+</table>
+<p>Extended navigation</p>
+<p>|Key|Action|
+|<code>SYMBOL SHIFT</code> + <code>⇦</code>|Move left one word|
+|<code>SYMBOL SHIFT</code> + <code>⇨</code>|Move right one word|
+|<code>SYMBOL SHIFT</code> + <code>⇧</code>|Page up|
+|<code>SYMBOL SHIFT</code> + <code>⇩</code>|Page down|</p>
 <ul>
-<li><p>The status/info section at the bottom displays the <code>EXT</code> indicator, which defaults to Off.</p>
-</li>
-<li><p>To enable extended keyboard mode:</p>
-<ul>
-<li>Press <code>EXTEND MODE</code> on the Next/N-GO keyboard.</li>
-<li>Press <code>CAPS SHIFT</code>+<code>SYMBOL SHIFT</code> on a rubber key Speccy.</li>
-<li>Press <code>Ctrl</code>+<code>Shift</code> on an external keyboard.</li>
+<li>Note: Due to the way the keyboard works, you can also press <code>EXTEND MODE</code> and the arrow keys to achieve the above actions.</li>
 </ul>
-</li>
-<li><p>When <code>EXT</code> is set to <code>On</code>, the Up/Down arrow keys will move up or down one page at a time.</p>
-</li>
-<li><p>To return to normal mode, press the appropriate <code>EXTEND MODE</code> key combination again.</p>
-</li>
-</ul>
-<h3 id="switching-to-command-mode">Switching to Command mode</h3>
-<p>Command mode gives access to the functions displayed in the status/info section.</p>
-<ul>
-<li>To toggle command mode:<ul>
-<li>Press <code>Edit</code> on the Next/N-GO keyboard.</li>
-<li>Press <code>CAPS SHIFT</code>+<code>1</code> on a rubber key Speccy.</li>
-<li>Press <code>Escape</code> on an external keyboard.</li>
-</ul>
-</li>
-</ul>
-<p>In the status/info section, you’ll see the current mode indicated. For example:</p>
-<ul>
-<li>In Edit mode, the <code>ESC</code> indicator shows <code>Edit</code>.</li>
-<li>In Command mode, the <code>ESC</code> indicator switches to <code>Command</code>.</li>
-</ul>
-<p>Once in Command mode:</p>
-<ul>
-<li>Keys with the <code>↑</code> prefix will become active and highlighted.</li>
-<li>Activate functions by pressing the <code>SYMBOL SHIFT</code> key along with the letter of the desired action.</li>
-</ul>
-<p><strong>NOTE:</strong> Editing is disabled while in Command mode, but navigation remains active.</p>
-<h3 id="cut-copy-and-paste">Cut/Copy and Paste</h3>
+<h3 id="cutcopy-and-paste">Cut/Copy and Paste</h3>
 <p>The editor allows text selection for cutting or copying.</p>
-<h4 id="marking-selecting-text-">Marking/Selecting Text:</h4>
+<h4 id="markingselecting-text">Marking/Selecting Text:</h4>
 <ol>
-<li>Switch to Command mode.</li>
-<li>Press <code>SYMBOL SHIFT</code>+<code>M</code> (<code>↑M</code>) to set a marker/anchor.</li>
+<li>Press <code>EXTEND MODE</code>+<code>M</code> (<code>↑M</code>) to set a marker/anchor.</li>
 <li>Move the cursor to select text between the marker and the cursor position.</li>
 <li>To clear the marker, press the <code>↑M</code> key combination again.</li>
 </ol>
-<h4 id="copying-text-">Copying Text:</h4>
+<h4 id="copying-text">Copying Text:</h4>
 <ul>
 <li>Once text is selected, press <code>↑C</code> to copy it to the buffer.</li>
 <li>Navigate to a new location and press <code>↑V</code> to paste.</li>
 </ul>
-<h4 id="cutting-text-">Cutting Text:</h4>
+<h4 id="cutting-text">Cutting Text:</h4>
 <ul>
 <li>Press <code>↑X</code> to cut (copy to buffer and remove from the document).</li>
 <li>Navigate to a new location and press <code>↑V</code> to paste.</li>

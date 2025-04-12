@@ -34,49 +34,34 @@ If the specified file exists, it will be loaded into the editor. Otherwise, a ne
 
 After launching, you can immediately start editing. Use the cursor/arrow keys for navigation as expected.
 
-### Paging through large documents
-The extended keyboard mode enables you to page through the document rather than moving up and down one line at a time.
+### Editor keys
 
-* The status/info section at the bottom displays the `EXT` indicator, which defaults to Off.
+Standard navigation
 
-* To enable extended keyboard mode:
-  * Press `EXTEND MODE` on the Next/N-GO keyboard.
-  * Press `CAPS SHIFT`+`SYMBOL SHIFT` on a rubber key Speccy.
-  * Press `Ctrl`+`Shift` on an external keyboard.
+|Key|Action|
+|---|------|
+|`⇦`|Move left one character|
+|`⇨`|Move right one character|
+|`⇧`|Move up one line|
+|`⇩`|Move down one line|
 
-* When `EXT` is set to `On`, the Up/Down arrow keys will move up or down one page at a time.
+Extended navigation
 
-* To return to normal mode, press the appropriate `EXTEND MODE` key combination again.
+|Key|Action|
+|`SYMBOL SHIFT` + `⇦`|Move left one word|
+|`SYMBOL SHIFT` + `⇨`|Move right one word|
+|`SYMBOL SHIFT` + `⇧`|Page up|
+|`SYMBOL SHIFT` + `⇩`|Page down|
 
-### Switching to Command mode
-
-Command mode gives access to the functions displayed in the status/info section.
-
-* To toggle command mode:
-  * Press `Edit` on the Next/N-GO keyboard.
-  * Press `CAPS SHIFT`+`1` on a rubber key Speccy.
-  * Press `Escape` on an external keyboard.
-
-In the status/info section, you’ll see the current mode indicated. For example:
-
-* In Edit mode, the `ESC` indicator shows `Edit`.
-* In Command mode, the `ESC` indicator switches to `Command`.
-
-Once in Command mode:
-
-* Keys with the `↑` prefix will become active and highlighted.
-* Activate functions by pressing the `SYMBOL SHIFT` key along with the letter of the desired action.
-
-**NOTE:** Editing is disabled while in Command mode, but navigation remains active.
+* Note: Due to the way the keyboard works, you can also press `EXTEND MODE` and the arrow keys to achieve the above actions.
 
 ### Cut/Copy and Paste
 The editor allows text selection for cutting or copying.
 
 #### Marking/Selecting Text:
-1. Switch to Command mode.
-2. Press `SYMBOL SHIFT`+`M` (`↑M`) to set a marker/anchor.
-3. Move the cursor to select text between the marker and the cursor position.
-4. To clear the marker, press the `↑M` key combination again.
+1. Press `EXTEND MODE`+`M` (`↑M`) to set a marker/anchor.
+2. Move the cursor to select text between the marker and the cursor position.
+3. To clear the marker, press the `↑M` key combination again.
 
 #### Copying Text:
 * Once text is selected, press `↑C` to copy it to the buffer.
