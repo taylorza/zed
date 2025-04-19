@@ -11,7 +11,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.1d"
+#define VERSION "0.1e"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
@@ -451,6 +451,7 @@ void editor_draw(EditorState* editor) {
 
     if (editor->mark_start != -1) editor_update_mark(editor);
     
+    standard();
     for (row = 0; row < LINES - 1 && i < total; ++row, ++i) {
         for (int col = 0; i < total; ++col, ++i) {
             char c = editor_get_char(editor, i);
@@ -827,7 +828,7 @@ int editor_search(EditorState* editor, const char* str, int start) {
     if (start < 0 || start >= total) {
         start = 0;
     }
-    for (int i = start; i <= total - len; ++i) {
+    for (int i = start; i < total - len; ++i) {
         for (int j = 0; j < len; ++j) {
             if (editor_get_char(editor, i + j) != str[j]) {
                 break;
@@ -851,12 +852,13 @@ CommandAction editor_find(EditorState* editor) {
         if (i == -1) i = editor_search(editor, input, 0);
 
         if (i != -1) {
-            editor->mark_start = i;
             editor_move_cursor_to(editor, i + len);
+            editor->mark_start = i;            
             editor->redraw_mode = REDRAW_ALL;
             editor_redraw(editor);
+            editor_update_status(editor, 0);
         }
-        set_cursor_pos(0, LINES);
+        set_cursor_pos(0, LINES);        
     }
     editor->mark_start = -1;
     editor->redraw_mode = REDRAW_CURSOR;

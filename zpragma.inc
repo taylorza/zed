@@ -17,7 +17,7 @@
 
 // logical -> physical lookup table only needs to cover main 64k
 
-// #pragma output DOTN_LAST_PAGE = 11
+#pragma output DOTN_LAST_PAGE = 11
 
 // allocate pages for 0x8000 and up
 
@@ -32,4 +32,5 @@
 //#pragma output CRT_APPEND_APPEND_MMAP = 1
 
 // default = 1  : non-zero closes open FILEs on exit
-#pragma output CRT_ENABLE_CLOSE = 1   
+#pragma output CRT_ENABLE_CLOSE = 1
+

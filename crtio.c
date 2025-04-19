@@ -239,27 +239,7 @@ char getch(void) {
         }
     }  
 }
-/*
-char getch(void) {
-    char *lastk = (char*)0x5c08;
-    position_caret();
-    *lastk = 0;
-    do {
-        __asm__("halt");
-        toggle_caret();
-    } while(*lastk == 0);
-    char ch = *lastk;
-    if (ch > 128) {
-        for(uint8_t i=0; i<sizeof(keymap)/sizeof(KeyMapEntry); ++i){
-            if (ch == keymap[i].code) {
-                ch = keymap[i].alt;
-                break;
-            }
-        }
-    }
-    return ch;
-}
-*/
+
 void position_caret(void) {
     uint16_t x = cx * 4;
     uint16_t y = cy * 8;
