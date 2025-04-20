@@ -20,6 +20,13 @@
 #define COLS 80
 
 #define TEXT_BUFFER_SIZE 22528
+#define AUTO_SAVE_TICKS 6000 // auto save roughly every 2 minutes
+
+#define FLAG_DIRTY 1
+#define FLAG_AUTOSAVE 2
+
+#define MASK_DIRTY (~FLAG_DIRTY)
+#define MASK_AUTOSAVE (~FLAG_AUTOSAVE)
 
 char text_buffer[TEXT_BUFFER_SIZE];
 
@@ -50,6 +57,7 @@ typedef struct {
     int cursor_row;         // current cursor row (in the gap buffer)
     int cursor_col;         // current cursor column (in the gap buffer)
     int mark_start;         // start of marked text (-1 if none)
+    uint16_t last_save_tick;// ticks at the time of the last save
     uint8_t dirty;          // dirty flag
     uint8_t file_too_large; // indicates that the file is too large (disable save)
     RedrawMode redraw_mode; // what to redraw    
@@ -100,6 +108,15 @@ char editor_get_char(EditorState* editor, int index) {
         return editor->buffer[(index - editor->gap_start) + editor->gap_end];
 }
 
+/* Returns index of the start of the line in the buffer at position 'at'*/
+uint16_t editor_find_line_start(EditorState* editor, int16_t at) {
+    int16_t pos = at < 0 ? 0 : at;
+    while (pos > 0 && editor->buffer[pos] != NL)
+        --pos;
+    if (editor->buffer[pos] == NL) ++pos;
+    return pos;
+}
+
 /* Insert a character at the current cursor position (i.e. at gap_start). */
 void editor_insert(EditorState* editor, char c) {
     if (editor->gap_start == editor->gap_end) {
@@ -107,7 +124,6 @@ void editor_insert(EditorState* editor, char c) {
     }
     editor->buffer[editor->gap_start] = c;
     ++editor->gap_start;
-    editor->redraw_mode = (c == NL ? REDRAW_ALL : REDRAW_LINE);
     if (c != NL) {
         editor->cursor_col++;
     }
@@ -115,7 +131,8 @@ void editor_insert(EditorState* editor, char c) {
         editor->cursor_row++;
         editor->cursor_col = 0;
     }
-    editor->dirty = 1;
+    editor->dirty = FLAG_DIRTY | FLAG_AUTOSAVE;
+    editor->redraw_mode = REDRAW_LINE;    
 }
 
 /* Insert 2 spaces the current cursor position. */
@@ -123,7 +140,23 @@ void editor_insert_tab(EditorState* editor) {
     uint8_t spaces = editor->cursor_col % 2;
     if (spaces == 0) spaces = 2;
     while (spaces--)
-        editor_insert(editor, '\t');
+        editor_insert(editor, ' ');
+}
+
+/* Insert newline, matching the current lines indent. */
+void editor_insert_newline(EditorState* editor) {
+    uint16_t pos = editor_find_line_start(editor, editor->gap_start - 1);
+    uint8_t spaces = 0;
+    while (pos < editor->gap_start && editor->buffer[pos] == ' ') {
+        ++spaces;
+        ++pos;
+    }
+
+    editor_insert(editor, NL);
+    // Add the indentation
+    while (spaces--)
+        editor_insert(editor, ' ');
+    editor->redraw_mode = REDRAW_ALL;
 }
 
 /* Delete the character to the left of the cursor (if any). */
@@ -143,7 +176,7 @@ void editor_backspace(EditorState* editor) {
             }
             editor->cursor_row--;
         }
-        editor->dirty = 1;
+        editor->dirty = FLAG_DIRTY | FLAG_AUTOSAVE;  
     }
 }
 
@@ -253,20 +286,22 @@ void editor_move_word(EditorState* editor, int8_t direction) {
         while (pos < len && is_whitespace(editor_get_char(editor, pos))) {
             ++pos;
         }
-    } else if (direction < 0 && pos > 0) {
+    }
+    else if (direction < 0 && pos > 0) {
         // If left character is not a space move left until we hit a space
         // at the begining of the current word
-        if (pos > 0 && !is_whitespace(editor_get_char(editor, pos-1))) {
-            while (pos > 0 && !is_whitespace(editor_get_char(editor, pos-1))) {
+        if (pos > 0 && !is_whitespace(editor_get_char(editor, pos - 1))) {
+            while (pos > 0 && !is_whitespace(editor_get_char(editor, pos - 1))) {
                 --pos;
             }
-        } else {
+        }
+        else {
             // If we are in a white space region move left past the white space
-            while(pos > 0 && is_whitespace(editor_get_char(editor, pos-1))) {
+            while (pos > 0 && is_whitespace(editor_get_char(editor, pos - 1))) {
                 --pos;
             }
             // then move left through the previous work
-            while (pos > 0 && !is_whitespace(editor_get_char(editor, pos-1))) {
+            while (pos > 0 && !is_whitespace(editor_get_char(editor, pos - 1))) {
                 --pos;
             }
         }
@@ -296,17 +331,8 @@ void editor_move_up(EditorState* editor) {
     if (cur_row == 0)
         return;  // Already on the first line.
 
-    // Find the start of the current line.
-    int pos = editor->gap_start - 1;
-    while (pos >= 0 && editor->buffer[pos] != NL)
-        pos--;
-    int current_line_start = pos + 1;
-
-    // Find the start of the previous line.
-    pos = current_line_start - 2;
-    while (pos >= 0 && editor->buffer[pos] != NL)
-        pos--;
-    int prev_line_start = pos + 1;
+    int16_t current_line_start = editor_find_line_start(editor, editor->gap_start - 1);
+    int16_t prev_line_start = editor_find_line_start(editor, current_line_start - 2);
 
     // Compute previous line’s length.
     int prev_line_length = current_line_start - 1 - prev_line_start;
@@ -450,7 +476,7 @@ void editor_draw(EditorState* editor) {
     int col_offset = editor->col_offset;
 
     if (editor->mark_start != -1) editor_update_mark(editor);
-    
+
     standard();
     for (row = 0; row < LINES - 1 && i < total; ++row, ++i) {
         for (int col = 0; i < total; ++col, ++i) {
@@ -462,7 +488,7 @@ void editor_draw(EditorState* editor) {
             }
 
             if (col >= col_offset && col < COLS + col_offset) {
-                if (editor->mark_start != -1) {                    
+                if (editor->mark_start != -1) {
                     if ((editor->mark_start < editor->gap_start && i >= editor->mark_start && i < editor->gap_start) ||
                         (editor->mark_start > editor->gap_start && i >= editor->gap_start && i < editor->mark_start))
                         highlight();
@@ -476,7 +502,7 @@ void editor_draw(EditorState* editor) {
     }
     // Standard attribute, needed when the marker runs to the end 
     // of the file and therefore does not reset
-    standard(); 
+    standard();
 
     // If we reached the end of the text, fill the rest of the screen with blank lines.
     while (row++ < LINES) {
@@ -494,7 +520,7 @@ void editor_message(const char* msg) {
     uint8_t ox, oy;
     get_cursor_pos(&ox, &oy);
     set_cursor_pos(0, LINES);
-    print("%s", msg);
+    if (msg) print("%s", msg);
     clreol();
     set_cursor_pos(ox, oy);
 }
@@ -509,7 +535,7 @@ void editor_update_filename(EditorState* editor) {
 
 void editor_print_hotkey(const char* short_cut_key, const char* description) {
     int len = HOTKEY_ITEM_WIDTH - (strlen(short_cut_key) + strlen(description));
-    highlight();print(short_cut_key); standard();
+    highlight(); print(short_cut_key); standard();
     print(" %s", description);
     while (len-- > 0) putch(' ');
 }
@@ -536,7 +562,7 @@ void editor_update_status(EditorState* editor, char key) {
 
     if (wasdirty != editor->dirty) {
         wasdirty = editor->dirty;
-        editor_update_filename(editor);        
+        editor_update_filename(editor);
     }
     set_cursor_pos(45, SCREEN_HEIGHT - 1);
     print("Mem: %d Ln %d, Col %d Key: %d", TEXT_BUFFER_SIZE - total, cursor_row + 1, cursor_col + 1, key);
@@ -564,17 +590,17 @@ void editor_redraw(EditorState* editor) {
     }
 }
 
-CommandAction confirm(const char *prompt) {
+CommandAction confirm(const char* prompt) {
     CommandAction retval;
 
     set_cursor_pos(0, LINES);
     print("%s (y/n) ", prompt);
     char ch = getch();
-    
-    switch(ch) {
+
+    switch (ch) {
         case 'Y':
         case 'y': retval = COMMAND_ACTION_YES; break;
-        case KEY_ESC: retval  = COMMAND_ACTION_CANCEL; break;
+        case KEY_ESC: retval = COMMAND_ACTION_CANCEL; break;
         default: retval = COMMAND_ACTION_NO; break;
     }
     set_cursor_pos(0, LINES);
@@ -630,7 +656,7 @@ uint8_t edit_line(const char* prompt, const char* alphabet, char* buffer, uint8_
             default:
                 if (len < maxlen && ch >= 32 && ch <= 128) {
                     if (!alphabet || strchr(alphabet, ch)) {
-                        memmove(buffer+i+1, buffer+i, len-i);
+                        memmove(buffer + i + 1, buffer + i, len - i);
                         buffer[i++] = ch;
                         if (i > len) buffer[i] = '\0';
                         ++len;
@@ -645,14 +671,21 @@ uint8_t edit_line(const char* prompt, const char* alphabet, char* buffer, uint8_
     return retval;
 }
 
-int editor_save_file(EditorState* editor) {
+int editor_save_file(EditorState* editor, uint8_t temp) {
+    editor->last_save_tick = get_ticks();
+
     if (editor->file_too_large) return 0;
+
+    editor_message("Saving...");
 
     char buf[32];
 #ifdef __ZXNEXT
     errno = 0;
     strcpy(tmpbuffer, editor->filename);
-    strcat(tmpbuffer, ".zed");
+    if (temp)
+        strcat(tmpbuffer, ".bak");
+    else
+        strcat(tmpbuffer, ".zed");
     char f = esxdos_f_open(tmpbuffer, ESXDOS_MODE_W | ESXDOS_MODE_CT);
     if (errno) return errno;
 
@@ -672,10 +705,13 @@ int editor_save_file(EditorState* editor) {
         }
     }
     esxdos_f_close(f);
-    esx_f_unlink(editor->filename);
-    if (esx_f_rename(tmpbuffer, editor->filename)) return errno;
-    esx_f_unlink(tmpbuffer);
+    if (!temp) {
+        esx_f_unlink(editor->filename);
+        if (esx_f_rename(tmpbuffer, editor->filename)) return errno;
+        esx_f_unlink(tmpbuffer);
+    }
 #endif //__ZXNEXT
+    editor_message(NULL);
     return 0;
 }
 
@@ -744,7 +780,7 @@ void editor_init_file(EditorState* editor, const char* filepath) {
 
 CommandAction editor_save(EditorState* editor) {
     if (editor->file_too_large) return COMMAND_ACTION_NONE;
-    
+
     editor->redraw_mode = REDRAW_CURSOR;
     set_cursor_pos(0, LINES);
 
@@ -752,7 +788,7 @@ CommandAction editor_save(EditorState* editor) {
         return COMMAND_ACTION_CANCEL;
 
     editor->filename = &filename[0];
-    int status = editor_save_file(editor);
+    int status = editor_save_file(editor, 0);
     if (status) {
 #ifdef __ZXNEXT
         esx_m_geterr(status, tmpbuffer);
@@ -764,6 +800,20 @@ CommandAction editor_save(EditorState* editor) {
     editor->dirty = 0;
     editor_update_filename(editor);
     return COMMAND_ACTION_NONE;
+}
+
+void editor_autosave(EditorState *editor) {
+    if ((get_ticks() - editor->last_save_tick) < AUTO_SAVE_TICKS) return;
+    
+    // reset autosave flag and save backup
+    editor->dirty &= MASK_AUTOSAVE;
+    int status = editor_save_file(editor, 1);
+#ifdef __ZXNEXT
+    if (status) {
+        esx_m_geterr(status, tmpbuffer);
+        editor_message(tmpbuffer);
+    }
+#endif
 }
 
 CommandAction editor_mark(EditorState* editor) {
@@ -853,12 +903,12 @@ CommandAction editor_find(EditorState* editor) {
 
         if (i != -1) {
             editor_move_cursor_to(editor, i + len);
-            editor->mark_start = i;            
+            editor->mark_start = i;
             editor->redraw_mode = REDRAW_ALL;
             editor_redraw(editor);
             editor_update_status(editor, 0);
         }
-        set_cursor_pos(0, LINES);        
+        set_cursor_pos(0, LINES);
     }
     editor->mark_start = -1;
     editor->redraw_mode = REDRAW_CURSOR;
@@ -886,18 +936,19 @@ CommandAction editor_quit(EditorState* editor) {
     editor->redraw_mode = REDRAW_CURSOR;
     if (editor->dirty && !editor->file_too_large) {
         CommandAction action = confirm("File modified. Save?");
-        switch(action) {
-            case COMMAND_ACTION_YES:        
+        switch (action) {
+            case COMMAND_ACTION_YES:
                 if (editor_save(editor) != COMMAND_ACTION_NONE) {
                     return COMMAND_ACTION_NONE;
                 }
                 break;
             case COMMAND_ACTION_CANCEL:
                 return COMMAND_ACTION_NONE;
-        }                
-        return COMMAND_ACTION_QUIT;                                    
-    } else if (confirm("Quit?") == COMMAND_ACTION_YES) {
-        return COMMAND_ACTION_QUIT;        
+        }
+        return COMMAND_ACTION_QUIT;
+    }
+    else if (confirm("Quit?") == COMMAND_ACTION_YES) {
+        return COMMAND_ACTION_QUIT;
     }
 
     return COMMAND_ACTION_NONE;
@@ -916,6 +967,7 @@ void edit(const char* filepath) {
     editor.top_row_index = 0;
     editor.cursor_row = 0;
     editor.cursor_col = 0;
+    editor.last_save_tick = get_ticks();
     editor.dirty = 0;
     editor.mark_start = -1;
     editor.file_too_large = 0;
@@ -936,6 +988,7 @@ void edit(const char* filepath) {
     while (1) {
         editor_redraw(&editor);
         editor_update_status(&editor, ch);
+        if (editor.dirty & FLAG_AUTOSAVE) editor_autosave(&editor);
 
         ch = getch();
         switch (ch) {
@@ -962,9 +1015,9 @@ void edit(const char* filepath) {
                 for (int i = 0; i < LINES - 2; ++i)
                     editor_move_down(&editor);
                 break;
-            case KEY_DOWN:                
+            case KEY_DOWN:
                 editor_move_down(&editor);
-                break;            
+                break;
             default:
                 switch (ch) {
                     case KEY_BACKSPACE:
@@ -974,12 +1027,13 @@ void edit(const char* filepath) {
                         editor_insert_tab(&editor);
                         break;
                     case KEY_ENTER:
-                        editor_insert(&editor, NL);
+                        editor_insert_newline(&editor);
                         break;
                     default:
                         if (ch >= 32 && ch <= 127) {
                             editor_insert(&editor, (char)ch);
-                        } else {
+                        }
+                        else {
                             for (Command* cmd = (Command*)commands; cmd->short_cut_key != NULL; ++cmd) {
                                 if (ch == cmd->key) {
                                     if (cmd->action) {
@@ -991,10 +1045,10 @@ void edit(const char* filepath) {
                                     }
                                     break;
                                 }
-                            }                            
+                            }
                         }
                         break;
-                    }                
+                }
         }
     }
 }

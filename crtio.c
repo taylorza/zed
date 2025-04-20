@@ -72,6 +72,8 @@ uint8_t cx = 0;         // caret X
 uint8_t cy = 0;         // caret Y
 uint8_t attr = 0;       // current attribute
 
+uint16_t ticks;         // internal ticker to track
+
 uint8_t caret_state[] = {
     0,              // 0x35 - X
     0,              // 0x36 - Y
@@ -219,6 +221,7 @@ char getch(void) {
     position_caret();
     for(;;) {
         __asm__("halt");
+        ++ticks;
         toggle_caret();
         char key = kbhandler();
         if (!key) {
@@ -298,5 +301,9 @@ void highlight(void) {
 
 void standard(void) {
     attr = 0b00000000;
+}
+
+uint16_t get_ticks(void) {
+    return ticks;
 }
 

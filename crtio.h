@@ -52,4 +52,6 @@ void get_cursor_pos(uint8_t *x, uint8_t *y);
 void highlight(void);
 void standard(void);
 
+uint16_t get_ticks(void);
+
 #endif //CRTIO_H_
