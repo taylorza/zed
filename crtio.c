@@ -128,6 +128,12 @@ void screen_init(void) {
     ZXN_NEXTREG(0x30, 0);               // X Scroll offset - LSB
     ZXN_NEXTREG(0x31, 0);               // Y Scroll offset
 
+    // Hide all sprites
+    for (uint8_t i=0;i<64;++i) {
+        ZXN_NEXTREGA(0x34, i);
+        ZXN_NEXTREG(0x38, 0);
+    }
+
     memcpy((void*)START_TILE_DEF, &font_crtio[0], sizeof(font_crtio));
     
     setup_caret_sprite();
