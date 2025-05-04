@@ -3,6 +3,7 @@
 #include <z80.h>
 #include <arch/zxn.h>
 
+#include "platform.h"
 #include "crtio.h"
 #include "editor.h"
 

@@ -8,6 +8,7 @@
 #endif
 #include <errno.h>
 
+#include "platform.h"
 #include "buffers.h"
 #include "crtio.h"
 #include "editor.h"
@@ -20,7 +21,7 @@
 #define LINES SCREEN_HEIGHT-5
 #define COLS 80
 
-#define TEXT_BUFFER_SIZE 23552
+#define TEXT_BUFFER_SIZE 24576
 #define AUTO_SAVE_TICKS 6000 // auto save roughly every 2 minutes
 
 #define FLAG_DIRTY 1

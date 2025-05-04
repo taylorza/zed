@@ -5,6 +5,7 @@
 #include <z80.h>
 #include <arch/zxn.h>
 
+#include "platform.h"
 #include "font.h"
 #include "crtio.h"
 

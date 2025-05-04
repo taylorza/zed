@@ -16,6 +16,5 @@
         "stdlib.h": "c",
         "stdbool.h": "c",
         "buffers.h": "c"
-    },
-    "C_Cpp.errorSquiggles": "disabled"
+    }
 }

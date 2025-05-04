@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#define MYCC __sdcccall(1)
-
 #define SCREEN_WIDTH    80
 #define SCREEN_HEIGHT   32
 
