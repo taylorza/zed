@@ -82,13 +82,13 @@ uint8_t caret_state[] = {
     0b10000000,     // 0x39 - 4-bit sprite, Y9
 };
 
-extern void kbd_scan(void);
+extern void kbd_scan(void) MYCC;
 
-extern void setup_caret_sprite(void);
-void position_caret(void);
-void update_caret(void);
+extern void setup_caret_sprite(void) MYCC;
+void position_caret(void) MYCC;
+void update_caret(void) MYCC;
 
-void screen_init(void) {
+void screen_init(void) MYCC {
     cx = 0;
     cy = 0;
     old_reg_6b = ZXN_READ_REG(0x6b);
@@ -142,7 +142,7 @@ void screen_init(void) {
     cls();
 }
 
-void screen_restore(void) {
+void screen_restore(void) MYCC {
     memset((void*)START_MAP, 0, 6144);
     hide_caret();
     ZXN_NEXTREGA(0x6b, old_reg_6b);
@@ -150,13 +150,13 @@ void screen_restore(void) {
     zx_border(old_border);
 }
 
-void cls(void) {
+void cls(void) MYCC {
     memset(screen, 0, (SCREEN_WIDTH * SCREEN_HEIGHT)*2);
     cx=0;
     cy=0;
 }
 
-void putch(char ch) {
+void putch(char ch) MYCC {
     if (ch == NL) {
         if (cy < SCREEN_HEIGHT-1) {
             ++cy;            
@@ -178,13 +178,13 @@ void putch(char ch) {
     ++cx;  
 }
 
-void clreol(void) {
+void clreol(void) MYCC {
     if (cx > SCREEN_WIDTH-1) return;
     char * p = screen+(((cy*SCREEN_WIDTH) + cx) << 1);
     memset(p, 0, (SCREEN_WIDTH - cx) << 1);    
 }
 
-void print(const char *fmt, ...) {
+void print(const char *fmt, ...) MYCC {
     char buf[80];
     va_list v;
     va_start(v, fmt);
@@ -196,7 +196,7 @@ void print(const char *fmt, ...) {
     }
 }
 
-char kbhandler(void) {
+char kbhandler(void) MYCC {
     kbd_scan();
     
     uint8_t shift = (uint8_t)((kbstate[7] & 1) | (kbstate[6] & 2));
@@ -220,7 +220,7 @@ char kbhandler(void) {
     return 0;  
 }
 
-char getch(void) {
+char getch(void) MYCC {
     static char lastkey = 0;
     static uint8_t repeating = 0;
     static uint8_t repeat_delay = 0;
@@ -249,7 +249,7 @@ char getch(void) {
     }  
 }
 
-void position_caret(void) {
+void position_caret(void) MYCC {
     uint16_t x = cx * 4;
     uint16_t y = cy * 8;
 
@@ -262,7 +262,7 @@ void position_caret(void) {
     update_caret();
 }
 
-void update_caret(void) {
+void update_caret(void) MYCC {
     ZXN_NEXTREG(0x34, 0);
     ZXN_NEXTREGA(0x35, caret_state[0]);
     ZXN_NEXTREGA(0x36, caret_state[1]);
@@ -271,17 +271,17 @@ void update_caret(void) {
     ZXN_NEXTREGA(0x39, caret_state[4]);
 }
 
-void show_caret(void) {
+void show_caret(void) MYCC {
     caret_state[3] |= 0x80;         // 0x38
     update_caret();
 }
 
-void hide_caret(void) {
+void hide_caret(void) MYCC {
     caret_state[3] &= 0x7f;         // 0x38
     update_caret();
 }
 
-void toggle_caret(void) {
+void toggle_caret(void) MYCC {
     static uint8_t rate = 0;
     if ((++rate & 15) == 0) {
         caret_state[3] ^= 0x80;     // 0x38
@@ -289,27 +289,27 @@ void toggle_caret(void) {
     }
 }
 
-void set_cursor_pos(uint8_t x, uint8_t y) {
+void set_cursor_pos(uint8_t x, uint8_t y) MYCC {
     if (x >= SCREEN_WIDTH) x = SCREEN_WIDTH-1;
     if (y >= SCREEN_HEIGHT) y = SCREEN_HEIGHT-1;
     cx = x;
     cy = y;
 }
 
-void get_cursor_pos(uint8_t *x, uint8_t *y) {
+void get_cursor_pos(uint8_t *x, uint8_t *y) MYCC {
     *x = cx;
     *y = cy;
 }
 
-void highlight(void) {
+void highlight(void) MYCC {
     attr = 0b00010000;
 }
 
-void standard(void) {
+void standard(void) MYCC {
     attr = 0b00000000;
 }
 
-uint16_t get_ticks(void) {
+uint16_t get_ticks(void) MYCC {
     return ticks;
 }
 

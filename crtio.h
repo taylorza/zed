@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define MYCC __sdcccall(1)
+
 #define SCREEN_WIDTH    80
 #define SCREEN_HEIGHT   32
 
@@ -32,26 +34,26 @@
 
 #define NL              '\r'
 
-void screen_init(void);
-void screen_restore(void);
+void screen_init(void) MYCC;
+void screen_restore(void) MYCC;
 
-void show_caret(void);
-void hide_caret(void);
-void toggle_caret(void); 
+void show_caret(void) MYCC;
+void hide_caret(void) MYCC;
+void toggle_caret(void) MYCC; 
 
-void cls(void);
-void clreol(void);
+void cls(void) MYCC;
+void clreol(void) MYCC;
 
-void putch(char ch);
-void print(const char *fmt, ...);
-char getch(void);
+void putch(char ch) MYCC;
+void print(const char *fmt, ...) MYCC;
+char getch(void) MYCC;
 
-void set_cursor_pos(uint8_t x, uint8_t y);
-void get_cursor_pos(uint8_t *x, uint8_t *y);
+void set_cursor_pos(uint8_t x, uint8_t y) MYCC;
+void get_cursor_pos(uint8_t *x, uint8_t *y) MYCC;
 
-void highlight(void);
-void standard(void);
+void highlight(void) MYCC;
+void standard(void) MYCC;
 
-uint16_t get_ticks(void);
+uint16_t get_ticks(void) MYCC;
 
 #endif //CRTIO_H_

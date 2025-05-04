@@ -67,17 +67,17 @@ typedef struct {
     const char* short_cut_key;
     const char* description;
     char key;
-    CommandAction(*action)(void);
+    CommandAction(*action)(void) MYCC;
 } Command;
 
-CommandAction editor_save(void);
-CommandAction editor_mark(void);
-CommandAction editor_copy(void);
-CommandAction editor_cut(void);
-CommandAction editor_paste(void);
-CommandAction editor_find(void);
-CommandAction editor_goto(void);
-CommandAction editor_quit(void);
+CommandAction editor_save(void) MYCC;
+CommandAction editor_mark(void) MYCC;
+CommandAction editor_copy(void) MYCC;
+CommandAction editor_cut(void) MYCC;
+CommandAction editor_paste(void) MYCC;
+CommandAction editor_find(void) MYCC;
+CommandAction editor_goto(void) MYCC;
+CommandAction editor_quit(void) MYCC;
 
 Command commands[] = {
     {"^S", "Save", KEY_SAVE, editor_save},
@@ -91,11 +91,11 @@ Command commands[] = {
     {NULL, NULL, 0, NULL}
 };
 
-uint8_t is_whitespace(char c) {
+uint8_t is_whitespace(char c) MYCC {
     return c == ' ' || c == NL;
 }
 
-uint16_t to_uint16(const char* s, char** p) {
+uint16_t to_uint16(const char* s, char** p) MYCC {
     uint16_t v = 0;
     while (isdigit(*s)) {
         v = (v * 10) + (*s - '0');
@@ -106,12 +106,12 @@ uint16_t to_uint16(const char* s, char** p) {
 }
 
 /* Returns the logical length (number of characters) of the text. */
-int editor_length(void) {
+int editor_length(void) MYCC {
     return e_gap_start + (TEXT_BUFFER_SIZE - e_gap_end);
 }
 
 /* Returns the i-th character of the text (ignoring the gap). */
-char editor_get_char(int index) {
+char editor_get_char(int index) MYCC {
     if (index < e_gap_start)
         return e_buffer[index];
     else
@@ -119,7 +119,7 @@ char editor_get_char(int index) {
 }
 
 /* Returns index of the start of the line in the buffer at position 'at'*/
-uint16_t editor_find_line_start(int16_t at) {
+uint16_t editor_find_line_start(int16_t at) MYCC {
     int16_t pos = at < 0 ? 0 : at;
     while (pos > 0 && e_buffer[pos] != NL)
         --pos;
@@ -128,7 +128,7 @@ uint16_t editor_find_line_start(int16_t at) {
 }
 
 /* Insert a character at the current cursor position (i.e. at gap_start). */
-void editor_insert(char c) {
+void editor_insert(char c) MYCC {
     if (e_gap_start == e_gap_end) {
         return;  // No space to insert.
     }
@@ -146,7 +146,7 @@ void editor_insert(char c) {
 }
 
 /* Insert 2 spaces the current cursor position. */
-void editor_insert_tab(void) {
+void editor_insert_tab(void) MYCC {
     uint8_t spaces = e_cursor_col % 2;
     if (spaces == 0) spaces = 2;
     while (spaces--)
@@ -154,7 +154,7 @@ void editor_insert_tab(void) {
 }
 
 /* Insert newline, matching the current lines indent. */
-void editor_insert_newline(void) {
+void editor_insert_newline(void) MYCC {
     uint16_t pos = editor_find_line_start(e_gap_start - 1);
     uint8_t spaces = 0;
     while (pos < e_gap_start && e_buffer[pos] == ' ') {
@@ -170,7 +170,7 @@ void editor_insert_newline(void) {
 }
 
 /* Delete the character to the left of the cursor (if any). */
-void editor_backspace(void) {
+void editor_backspace(void) MYCC {
     if (e_gap_start > 0) {
         char c = e_buffer[--e_gap_start];
         e_redraw_mode = (c == NL ? REDRAW_ALL : REDRAW_LINE);
@@ -190,7 +190,7 @@ void editor_backspace(void) {
     }
 }
 
-void editor_update_mark(void) {
+void editor_update_mark(void) MYCC {
     if (e_mark_start == -1) return;
     int marklen = abs(e_gap_start - e_mark_start);
 
@@ -208,7 +208,7 @@ void editor_update_mark(void) {
  * Move the gap one character to the left.
  * (That is, move one character from before the gap to after it.)
  */
-void editor_move_left(void) {
+void editor_move_left(void) MYCC {
     if (e_gap_start > 0) {
         --e_gap_start;
         --e_gap_end;
@@ -244,7 +244,7 @@ void editor_move_left(void) {
  * Move the gap one character to the right.
  * (That is, move one character from after the gap into the gap.)
  */
-void editor_move_right(void) {
+void editor_move_right(void) MYCC {
     if (e_gap_end < TEXT_BUFFER_SIZE) {
         e_buffer[e_gap_start] = e_buffer[e_gap_end];
         e_gap_start++;
@@ -275,7 +275,7 @@ void editor_move_right(void) {
  * Reposition the gap (i.e. the cursor) to a given logical text index.
  * This is done by repeated left/right moves.
  */
-void editor_move_cursor_to(int pos) {
+void editor_move_cursor_to(int pos) MYCC {
     while (e_gap_start > pos) editor_move_left();
     while (e_gap_start < pos) editor_move_right();
 }
@@ -283,7 +283,7 @@ void editor_move_cursor_to(int pos) {
 /*
  * Reposition the gap to the next character after a space
  */
-void editor_move_word(int8_t direction) {
+void editor_move_word(int8_t direction) MYCC {
     int pos = e_gap_start;
     int len = editor_length();
 
@@ -325,7 +325,7 @@ void editor_move_word(int8_t direction) {
  * Compute the cursor's current (row, col) in the text by scanning
  * the characters up to gap_start. (This ignores the text after the gap.)
  */
-void editor_get_cursor_position(int* row, int* col) {
+void editor_get_cursor_position(int* row, int* col) MYCC {
     *row = e_cursor_row;
     *col = e_cursor_col;
 }
@@ -335,7 +335,7 @@ void editor_get_cursor_position(int* row, int* col) {
  * This finds the start of the previous line and positions the cursor in that line
  * at the same column as the current cursor (or the end of the line, whichever comes first).
  */
-void editor_move_up(void) {
+void editor_move_up(void) MYCC {
     int cur_row, cur_col;
     editor_get_cursor_position(&cur_row, &cur_col);
     if (cur_row == 0)
@@ -355,7 +355,7 @@ void editor_move_up(void) {
  * Move the cursor one line down.
  * This finds the next line and moves to the same column (or as far as is available).
  */
-void editor_move_down(void) {
+void editor_move_down(void) MYCC {
     int cur_row, cur_col;
     editor_get_cursor_position(&cur_row, &cur_col);
     int total = editor_length();
@@ -387,7 +387,7 @@ void editor_move_down(void) {
  * Update the vertical (row_offset) and horizontal (col_offset) scrolling
  * based on the current cursor position so that the cursor stays visible.
  */
-void editor_update_scroll(void) {
+void editor_update_scroll(void) MYCC {
     int cursor_row, cursor_col;
     editor_get_cursor_position(&cursor_row, &cursor_col);
 
@@ -435,7 +435,7 @@ void editor_update_scroll(void) {
     }
 }
 
-void update_hardware_cursor(int cursor_col, int cursor_row)
+void update_hardware_cursor(int cursor_col, int cursor_row) MYCC 
 {
     // Place the hardware cursor in the proper on-screen position.
     int screen_cursor_row = cursor_row - e_row_offset;
@@ -447,7 +447,7 @@ void update_hardware_cursor(int cursor_col, int cursor_row)
         set_cursor_pos(0, LINES - 2);
 }
 
-void editor_draw_line(void) {
+void editor_draw_line(void) MYCC {
     int i = e_gap_start;
     while (i > 0 && e_buffer[i - 1] != NL)
         i--;
@@ -477,7 +477,7 @@ void editor_draw_line(void) {
  * We “reassemble” the text (ignoring the gap) into lines. A reserved status line
  * is drawn at the bottom.
  */
-void editor_draw(void) {
+void editor_draw(void) MYCC {
     int total = editor_length();
     int i = e_top_row_index;
 
@@ -526,7 +526,7 @@ void editor_draw(void) {
     e_redraw_mode = REDRAW_NONE;
 }
 
-void editor_message(const char* msg) {
+void editor_message(const char* msg) MYCC {
     uint8_t ox, oy;
     get_cursor_pos(&ox, &oy);
     set_cursor_pos(0, LINES);
@@ -535,7 +535,7 @@ void editor_message(const char* msg) {
     set_cursor_pos(ox, oy);
 }
 
-void editor_update_filename(void) {
+void editor_update_filename(void) MYCC {
     set_cursor_pos(0, SCREEN_HEIGHT - 1);
     highlight();
     print("Filename: %s%c", e_filename ? e_filename : "Untitled", e_dirty ? '*' : ' ');
@@ -543,14 +543,14 @@ void editor_update_filename(void) {
     clreol();
 }
 
-void editor_print_hotkey(const char* short_cut_key, const char* description) {
+void editor_print_hotkey(const char* short_cut_key, const char* description) MYCC {
     int len = HOTKEY_ITEM_WIDTH - (strlen(short_cut_key) + strlen(description));
     highlight(); print(short_cut_key); standard();
     print(" %s", description);
     while (len-- > 0) putch(' ');
 }
 
-void editor_show_hotkeys(void) {
+void editor_show_hotkeys(void) MYCC {
     set_cursor_pos(0, LINES + 1);
     int i = 0;
     for (Command* cmd = &commands[0]; cmd->short_cut_key != NULL; ++cmd) {
@@ -561,7 +561,7 @@ void editor_show_hotkeys(void) {
     if (e_file_too_large) editor_message("File too large, save is disabled");
 }
 
-void editor_update_status(char key) {
+void editor_update_status(char key) MYCC {
     static uint8_t wasdirty = 0;
     int total = editor_length();
 
@@ -580,7 +580,7 @@ void editor_update_status(char key) {
     set_cursor_pos(ox, oy);
 }
 
-void editor_redraw(void) {
+void editor_redraw(void) MYCC {
     editor_update_scroll();
 
     if (e_mark_start != -1) {
@@ -600,7 +600,7 @@ void editor_redraw(void) {
     }
 }
 
-CommandAction confirm(const char* prompt) {
+CommandAction confirm(const char* prompt) MYCC {
     CommandAction retval;
 
     set_cursor_pos(0, LINES);
@@ -619,7 +619,7 @@ CommandAction confirm(const char* prompt) {
 }
 
 // Edit a line of text restricting to the given alphabet.
-uint8_t edit_line(const char* prompt, const char* alphabet, char* buffer, uint8_t maxlen) {
+uint8_t edit_line(const char* prompt, const char* alphabet, char* buffer, uint8_t maxlen) MYCC {
     uint8_t ox, oy;
     get_cursor_pos(&ox, &oy);
 
@@ -681,7 +681,7 @@ uint8_t edit_line(const char* prompt, const char* alphabet, char* buffer, uint8_
     return retval;
 }
 
-int editor_save_file(uint8_t temp) {
+int editor_save_file(uint8_t temp) MYCC {
     e_last_save_tick = get_ticks();
 
     if (e_file_too_large) return 0;
@@ -725,7 +725,7 @@ int editor_save_file(uint8_t temp) {
     return 0;
 }
 
-void editor_init_file(const char* filepath) {
+void editor_init_file(const char* filepath) MYCC {
     e_filename = NULL;
 #ifdef __ZXNEXT
     if (filepath) {
@@ -788,7 +788,7 @@ void editor_init_file(const char* filepath) {
 #endif
 }
 
-CommandAction editor_save(void) {
+CommandAction editor_save(void) MYCC {
     if (e_file_too_large) return COMMAND_ACTION_NONE;
 
     e_redraw_mode = REDRAW_CURSOR;
@@ -812,7 +812,7 @@ CommandAction editor_save(void) {
     return COMMAND_ACTION_NONE;
 }
 
-void editor_autosave(void) {
+void editor_autosave(void) MYCC {
     if ((get_ticks() - e_last_save_tick) < AUTO_SAVE_TICKS) return;
 
     // reset autosave flag and save backup
@@ -826,7 +826,7 @@ void editor_autosave(void) {
 #endif
 }
 
-CommandAction editor_mark(void) {
+CommandAction editor_mark(void) MYCC {
     if (e_mark_start == -1)
         e_mark_start = e_gap_start;
     else {
@@ -836,7 +836,7 @@ CommandAction editor_mark(void) {
     return COMMAND_ACTION_NONE;
 }
 
-void editor_cutcopy(uint8_t cut) {
+void editor_cutcopy(uint8_t cut) MYCC {
     if (e_mark_start == -1) return;
 
     int start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
@@ -862,17 +862,17 @@ void editor_cutcopy(uint8_t cut) {
     e_redraw_mode = REDRAW_ALL;
 }
 
-CommandAction editor_copy(void) {
+CommandAction editor_copy(void) MYCC {
     editor_cutcopy(0);
     return COMMAND_ACTION_NONE;
 }
 
-CommandAction editor_cut(void) {
+CommandAction editor_cut(void) MYCC {
     editor_cutcopy(1);
     return COMMAND_ACTION_NONE;
 }
 
-CommandAction editor_paste(void) {
+CommandAction editor_paste(void) MYCC {
     char* src = scratch_buffer;
     for (int i = 0; *src && i < SCRATCH_BUFFER_SIZE; ++i) {
         editor_insert(*src++);
@@ -882,7 +882,7 @@ CommandAction editor_paste(void) {
     return COMMAND_ACTION_NONE;
 }
 
-int editor_search(const char* str, int start) {
+int editor_search(const char* str, int start) MYCC {
     int len = strlen(str);
     int total = editor_length();
     if (start < 0 || start >= total) {
@@ -901,7 +901,7 @@ int editor_search(const char* str, int start) {
     return -1;
 }
 
-CommandAction editor_find(void) {
+CommandAction editor_find(void) MYCC {
     static char input[32] = { 0 };
     set_cursor_pos(0, LINES);
     while (edit_line("Find", NULL, input, sizeof(input))) {
@@ -925,7 +925,7 @@ CommandAction editor_find(void) {
     return COMMAND_ACTION_NONE;
 }
 
-void editor_gotoline(uint16_t line, uint16_t col) {
+void editor_gotoline(uint16_t line, uint16_t col) MYCC {
     int total = editor_length();
     int i = 0;
     for (int j = 1; j < line && i < total; ++j) {
@@ -941,7 +941,7 @@ void editor_gotoline(uint16_t line, uint16_t col) {
     if (i < total) editor_move_cursor_to(i);
 }
 
-CommandAction editor_goto(void) {
+CommandAction editor_goto(void) MYCC {
     char input[8] = { 0 };
     set_cursor_pos(0, LINES);
     if (edit_line("Line number", "1234567890", input, sizeof(input))) {
@@ -951,7 +951,7 @@ CommandAction editor_goto(void) {
     return COMMAND_ACTION_NONE;
 }
 
-CommandAction editor_quit(void) {
+CommandAction editor_quit(void) MYCC {
     e_redraw_mode = REDRAW_CURSOR;
     if (e_dirty && !e_file_too_large) {
         CommandAction action = confirm("File modified. Save?");
@@ -973,7 +973,7 @@ CommandAction editor_quit(void) {
     return COMMAND_ACTION_NONE;
 }
 
-void edit(const char* filepath, uint16_t line, uint16_t col) {
+void edit(const char* filepath, uint16_t line, uint16_t col) MYCC {
     /* Initial the editor; the entire space is initially the gap. */
     e_buffer = &text_buffer[0];
     e_filename = NULL;
