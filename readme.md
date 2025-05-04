@@ -28,6 +28,19 @@ If the specified file exists, it will be loaded into the editor. Otherwise, a ne
 .zed readme.txt
 ```
 
+To open a file with the cursor positioned at a specific line and column, use the `+` prefix when specifying the location.
+For example, to start the editor on line 16, run:
+
+```bash
+.zed +16 readme.txt
+```
+
+You can also specify a column within the line:
+
+```bash
+.zed +16,7 readme.txt
+```
+
 ---
 
 ## Editing files

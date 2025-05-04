@@ -22,7 +22,25 @@ void init(void) {
 int main(int argc, char *argv[]) { 
     init();
     screen_init();
-    edit(argc == 2 ? argv[1] : NULL);
+
+    const char *filename = NULL;
+    uint16_t line = 0;
+    uint16_t col = 0;
+
+    for (int i=1; i<argc; ++i) {
+        if (*argv[i] == '+') {
+            char *p = argv[i];
+            ++p; // skip '+'
+            line = to_uint16(p, &p);
+            if (*p == ',') {
+                ++p; // skip ','
+                col = to_uint16(p, &p);
+            }
+        } else {
+            filename = argv[i];
+        }
+    }    
+    edit(filename, line, col);
     
     return 0;
 }

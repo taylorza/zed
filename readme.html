@@ -155,6 +155,12 @@
 <p>If the specified file exists, it will be loaded into the editor. Otherwise, a new document will be created with the filename prefilled.</p>
 <pre><code class="language-bash">.zed readme.txt
 </code></pre>
+<p>To open a file with the cursor positioned at a specific line and column, use the `+` prefix when specifying the location.
+For example, to start the editor on line 16, run:</p>
+<pre><code class="language-bash">.zed +16 readme.txt
+</code></pre>
+<p>You can also specify a column within the line:</p>
+<pre><code class="language-bash">.zed +16,7 readme.txt</code></pre>
 <hr>
 <h2 id="editing-files">Editing files</h2>
 <p>After launching, you can immediately start editing. Use the cursor/arrow keys for navigation as expected.</p>
