@@ -13,7 +13,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.2"
+#define VERSION "0.3"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
@@ -29,6 +29,10 @@
 
 #define MASK_DIRTY (~FLAG_DIRTY)
 #define MASK_AUTOSAVE (~FLAG_AUTOSAVE)
+
+struct esx_cat cat;
+struct esx_lfn lfn;
+char *filename = &lfn.filename[0];
 
 char text_buffer[TEXT_BUFFER_SIZE];
 
@@ -726,65 +730,60 @@ int editor_save_file(uint8_t temp) MYCC {
     return 0;
 }
 
-void editor_init_file(const char* filepath) MYCC {
-    e_filename = NULL;
+void editor_init_file(void) MYCC {
 #ifdef __ZXNEXT
-    if (filepath) {
-        strcpy(filename, filepath);         // copy the file path the filename
-        e_filename = &filename[0];
-        errno = 0;
-        char f = esxdos_f_open(filename, ESXDOS_MODE_R | ESXDOS_MODE_OE);
-        if (!errno) {
-            size_t bytes_read = esxdos_f_read(f, e_buffer, TEXT_BUFFER_SIZE);
+    errno = 0;
+    char f = esxdos_f_open(filename, ESXDOS_MODE_R | ESXDOS_MODE_OE);
+    if (!errno) {
+        size_t bytes_read = esxdos_f_read(f, e_buffer, TEXT_BUFFER_SIZE);
 
-            e_file_too_large = (bytes_read == TEXT_BUFFER_SIZE);
-            if (bytes_read > 0) {
-                char* start = &e_buffer[0];
+        e_file_too_large = (bytes_read == TEXT_BUFFER_SIZE);
+        if (bytes_read > 0) {
+            char* start = &e_buffer[0];
 
-                char* src = (char*)(start + bytes_read - 1);
-                char* dst = (char*)(start + TEXT_BUFFER_SIZE - 1);
-                uint16_t bytescopied = 0;
-                char skip_eol_char = 0;
-                char lead_eol_char = 0;
-                while (src >= start) {
-                    char ch = *src;
-                    if (!skip_eol_char) {
-                        switch (ch) {
-                            case '\r':
-                                lead_eol_char = '\r';
-                                skip_eol_char = '\n';
-                                break;
-                            case '\n':
-                                lead_eol_char = '\n';
-                                skip_eol_char = '\r';
-                                break;
-                        }
-                    }
-                    if (ch == '\t') {
-                        if (dst - 2 < start) {
-                            e_file_too_large = 1;
+            char* src = (char*)(start + bytes_read - 1);
+            char* dst = (char*)(start + TEXT_BUFFER_SIZE - 1);
+            uint16_t bytescopied = 0;
+            char skip_eol_char = 0;
+            char lead_eol_char = 0;
+            while (src >= start) {
+                char ch = *src;
+                if (!skip_eol_char) {
+                    switch (ch) {
+                        case '\r':
+                            lead_eol_char = '\r';
+                            skip_eol_char = '\n';
                             break;
-                        }
-                        *dst-- = ' ';
-                        *dst-- = ' ';
-                        bytescopied += 2;
-                    }
-                    else if (ch != skip_eol_char) {
-                        if (dst - 1 < start) {
-                            e_file_too_large = 1;
+                        case '\n':
+                            lead_eol_char = '\n';
+                            skip_eol_char = '\r';
                             break;
-                        }
-                        if (lead_eol_char && ch == lead_eol_char) ch = NL;
-                        *dst-- = ch;
-                        ++bytescopied;
                     }
-                    --src;
                 }
-                e_gap_start = 0;
-                e_gap_end = TEXT_BUFFER_SIZE - bytescopied;
+                if (ch == '\t') {
+                    if (dst - 2 < start) {
+                        e_file_too_large = 1;
+                        break;
+                    }
+                    *dst-- = ' ';
+                    *dst-- = ' ';
+                    bytescopied += 2;
+                }
+                else if (ch != skip_eol_char) {
+                    if (dst - 1 < start) {
+                        e_file_too_large = 1;
+                        break;
+                    }
+                    if (lead_eol_char && ch == lead_eol_char) ch = NL;
+                    *dst-- = ch;
+                    ++bytescopied;
+                }
+                --src;
             }
-            esxdos_f_close(f);
+            e_gap_start = 0;
+            e_gap_end = TEXT_BUFFER_SIZE - bytescopied;
         }
+        esxdos_f_close(f);
     }
 #endif
 }
@@ -814,7 +813,7 @@ CommandAction editor_save(void) MYCC {
 }
 
 void editor_autosave(void) MYCC {
-    if ((get_ticks() - e_last_save_tick) < AUTO_SAVE_TICKS) return;
+    if (!e_filename || (get_ticks() - e_last_save_tick) < AUTO_SAVE_TICKS) return;
 
     // reset autosave flag and save backup
     e_dirty &= MASK_AUTOSAVE;
@@ -994,9 +993,21 @@ void edit(const char* filepath, uint16_t line, uint16_t col) MYCC {
     filename[0] = '\0';
 
     if (filepath) {
-        strncpy(filename, filepath, MAX_FILENAME_LEN); // copy the file path the filename
+        strncpy(filename, filepath, MAX_FILENAME_LEN);
+
+        cat.filter = ESX_CAT_FILTER_SYSTEM | ESX_CAT_FILTER_LFN;
+        cat.filename = p3dos_cstr_to_pstr(filename);
+        cat.cat_sz = 2;
+        
+        if (esx_dos_catalog(&cat) == 1) {
+            lfn.cat = &cat;
+            esx_ide_get_lfn(&lfn, &cat.cat[1]);
+        } else {
+            strncpy(filename, filepath, MAX_FILENAME_LEN);
+        }
+        
         e_filename = &filename[0];
-        editor_init_file(filepath);
+        editor_init_file();
     }
 
     char ch = 0;
