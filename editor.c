@@ -80,6 +80,7 @@ CommandAction editor_mark(void) MYCC;
 CommandAction editor_copy(void) MYCC;
 CommandAction editor_cut(void) MYCC;
 CommandAction editor_paste(void) MYCC;
+CommandAction editor_cutline(void) MYCC;
 CommandAction editor_find(void) MYCC;
 CommandAction editor_goto(void) MYCC;
 CommandAction editor_quit(void) MYCC;
@@ -90,6 +91,7 @@ Command commands[] = {
     {"^C", "Copy", KEY_COPY, editor_copy},
     {"^X", "Cut", KEY_CUT, editor_cut},
     {"^V", "Paste", KEY_PASTE, editor_paste},
+    {"^K", "Cut Line", KEY_CUTLINE, editor_cutline},
     {"^F", "Find", KEY_FIND, editor_find},
     {"^G", "Goto", KEY_GOTO, editor_goto},
     {"^Q", "Quit", KEY_QUIT, editor_quit},
@@ -129,6 +131,20 @@ uint16_t editor_find_line_start(int16_t at) MYCC {
     while (pos > 0 && e_buffer[pos] != NL)
         --pos;
     if (e_buffer[pos] == NL) ++pos;
+    return pos;
+}
+
+/* Returns index of the end of the line in the buffer at position 'at'*/
+uint16_t editor_find_line_end(int16_t at) MYCC {
+    int total = editor_length();
+
+    int pos = at;
+    while (pos < total) {
+        char c = editor_get_char(pos);
+        if (c == NL)
+            break;
+        pos++;
+    }
     return pos;
 }
 
@@ -365,14 +381,7 @@ void editor_move_down(void) MYCC {
     editor_get_cursor_position(&cur_row, &cur_col);
     int total = editor_length();
 
-    // Find the end of the current line.
-    int pos = e_gap_start;
-    while (pos < total) {
-        char c = editor_get_char(pos);
-        if (c == NL)
-            break;
-        pos++;
-    }
+    int pos = editor_find_line_end(e_gap_start);
     if (pos >= total)
         return;  // No next line available.
 
@@ -836,11 +845,7 @@ CommandAction editor_mark(void) MYCC {
     return COMMAND_ACTION_NONE;
 }
 
-void editor_cutcopy(uint8_t cut) MYCC {
-    if (e_mark_start == -1) return;
-
-    int start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
-    int end = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
+void editor_cutcopy(uint8_t cut, int start, int end) MYCC {
     int len = end - start;
 
     // Copy marked text
@@ -863,12 +868,19 @@ void editor_cutcopy(uint8_t cut) MYCC {
 }
 
 CommandAction editor_copy(void) MYCC {
-    editor_cutcopy(0);
+    if (e_mark_start == -1) return COMMAND_ACTION_NONE;
+    int start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
+    int end = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
+
+    editor_cutcopy(0, start, end);
     return COMMAND_ACTION_NONE;
 }
 
 CommandAction editor_cut(void) MYCC {
-    editor_cutcopy(1);
+    if (e_mark_start == -1) return COMMAND_ACTION_NONE;
+    int start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
+    int end = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
+    editor_cutcopy(1, start, end);
     return COMMAND_ACTION_NONE;
 }
 
@@ -879,6 +891,14 @@ CommandAction editor_paste(void) MYCC {
     }
     e_mark_start = -1;
     e_redraw_mode = REDRAW_ALL;
+    return COMMAND_ACTION_NONE;
+}
+
+CommandAction editor_cutline(void) MYCC {
+    int start = editor_find_line_start(e_gap_start-1);
+    int end = editor_find_line_end(e_gap_start);
+    if (editor_get_char(end) == NL) ++end;
+    editor_cutcopy(1, start, end);
     return COMMAND_ACTION_NONE;
 }
 

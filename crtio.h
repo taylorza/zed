@@ -29,6 +29,7 @@
 #define KEY_FIND        230
 #define KEY_SAVE        243
 #define KEY_GOTO        231
+#define KEY_CUTLINE     235 // ^K
 
 #define NL              '\r'
 
