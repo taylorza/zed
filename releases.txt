@@ -1,3 +1,5 @@
-2025/05/19 - Version 0.3
-- Fixed: LFN filename saving when using 8.3 (reported by: em00k)
+2025/05/19 - Version 0.3a
 - Added: Cut line (Extend+K/^K)
+
+2025/05/11 - Version 0.3
+- Fixed: LFN filename saving when using 8.3 (reported by: em00k)

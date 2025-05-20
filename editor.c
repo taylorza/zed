@@ -13,7 +13,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.3"
+#define VERSION "0.3a"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6

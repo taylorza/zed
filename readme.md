@@ -85,6 +85,10 @@ The editor allows text selection for cutting or copying.
 * Press `↑X` to cut (copy to buffer and remove from the document).
 * Navigate to a new location and press `↑V` to paste.
 
+#### Cutting Lines:
+* Press `↑K` to cut the current line (copy to buffer and remove from the document).
+* Navigate to a new location and press `↑V` to paste.
+
 **NOTE:** The copy buffer is limited to 2K. The marker will adjust automatically to prevent exceeding this limit.
 
 ### Other commands
