@@ -256,14 +256,6 @@ void editor_move_left(void) MYCC {
             e_cursor_row--;
         }
 
-        if (e_col_offset > 0) {
-            uint8_t cx, cy;
-            get_cursor_pos(&cx, &cy);
-            if (cx < 3) {
-                e_col_offset--;
-                e_redraw_mode = REDRAW_ALL;
-            }
-        }
         editor_update_mark();
     }
 }
@@ -287,14 +279,6 @@ void editor_move_right(void) MYCC {
             e_cursor_row++;
         }
 
-        if (e_col_offset > 0) {
-            uint8_t cx, cy;
-            get_cursor_pos(&cx, &cy);
-            if (cx > COLS - 3) {
-                e_col_offset++;
-                e_redraw_mode = REDRAW_ALL;
-            }
-        }
         editor_update_mark();
     }
 }
@@ -421,10 +405,10 @@ void editor_update_scroll(void) MYCC {
         e_row_offset = cursor_row - (LINES - 2); // -1 reserved for status line
 
     // Horizontal scrolling:
-    if (cursor_col < e_col_offset)
-        e_col_offset = cursor_col;
+    if (cursor_col <= e_col_offset)
+        e_col_offset = cursor_col >= 4 ? cursor_col-4 : 0;
     else if (cursor_col >= e_col_offset + COLS)
-        e_col_offset = cursor_col - COLS + 1;
+        e_col_offset = cursor_col - COLS + 4;
 
     // If the offsets have changed, redraw the screen.
     if (e_row_offset != old_row_offset || e_col_offset != old_col_offset) {
@@ -487,9 +471,6 @@ void editor_draw_line(void) MYCC {
     }
     clreol();
 
-    int cursor_row, cursor_col;
-    editor_get_cursor_position(&cursor_row, &cursor_col);
-    update_hardware_cursor(cursor_col, cursor_row);
     e_redraw_mode = REDRAW_NONE;
 }
 
@@ -503,14 +484,15 @@ void editor_draw(void) MYCC {
     int i = e_top_row_index;
 
     set_cursor_pos(0, 0);
-    int row;
-    int col_offset = e_col_offset;
-
+    
     if (e_mark_start != -1) editor_update_mark();
 
     standard();
+    static int row;
+    static int col;
+    static char c;
     for (row = 0; row < LINES - 1 && i < total; ++row, ++i) {
-        for (int col = 0; i < total; ++col, ++i) {
+        for (col = 0; i < total; ++col, ++i) {
             char c = editor_get_char(i);
             if (c == NL) {
                 clreol();
@@ -518,7 +500,7 @@ void editor_draw(void) MYCC {
                 break;
             }
 
-            if (col >= col_offset && col < COLS + col_offset) {
+            if (col >= e_col_offset && col < COLS + e_col_offset) {
                 if (e_mark_start != -1) {
                     if ((e_mark_start < e_gap_start && i >= e_mark_start && i < e_gap_start) ||
                         (e_mark_start > e_gap_start && i >= e_gap_start && i < e_mark_start))
@@ -541,9 +523,6 @@ void editor_draw(void) MYCC {
         putch(NL);
     }
 
-    int cursor_row, cursor_col;
-    editor_get_cursor_position(&cursor_row, &cursor_col);
-    update_hardware_cursor(cursor_col, cursor_row);
     e_redraw_mode = REDRAW_NONE;
 }
 
@@ -619,11 +598,10 @@ void editor_redraw(void) MYCC {
     else if (e_redraw_mode == REDRAW_LINE) {
         editor_draw_line();
     }
-    else if (e_redraw_mode == REDRAW_CURSOR) {
-        int cursor_row, cursor_col;
-        editor_get_cursor_position(&cursor_row, &cursor_col);
-        update_hardware_cursor(cursor_col, cursor_row);
-    }
+
+    int cursor_row, cursor_col;
+    editor_get_cursor_position(&cursor_row, &cursor_col);
+    update_hardware_cursor(cursor_col, cursor_row);
 }
 
 CommandAction confirm(const char* prompt) MYCC {
@@ -955,6 +933,7 @@ CommandAction editor_find(void) MYCC {
         }
         set_cursor_pos(0, LINES);
     }
+    editor_move_cursor_to(e_mark_start);
     e_mark_start = -1;
     e_redraw_mode = REDRAW_CURSOR;
     return COMMAND_ACTION_NONE;
