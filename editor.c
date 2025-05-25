@@ -487,30 +487,37 @@ void editor_draw(void) MYCC {
     
     if (e_mark_start != -1) editor_update_mark();
 
-    standard();
     static int row;
     static int col;
     static char c;
-    for (row = 0; row < LINES - 1 && i < total; ++row, ++i) {
-        for (col = 0; i < total; ++col, ++i) {
-            char c = editor_get_char(i);
-            if (c == NL) {
-                clreol();
-                putch(NL);
-                break;
-            }
+    static int mark_from;
+    static int mark_to;
 
-            if (col >= e_col_offset && col < COLS + e_col_offset) {
-                if (e_mark_start != -1) {
-                    if ((e_mark_start < e_gap_start && i >= e_mark_start && i < e_gap_start) ||
-                        (e_mark_start > e_gap_start && i >= e_gap_start && i < e_mark_start))
-                        highlight();
-                    else
-                        standard();
-                }
-                putch(c);
-            }
+    mark_from = e_mark_start <= e_gap_start ? e_mark_start : e_gap_start;
+    mark_to   = e_mark_start >= e_gap_start ? e_mark_start : e_gap_start;
+    
+    standard();
+    for (row = 0; row < LINES - 1 && i < total; ++row, ++i) {
+        for(col = 0; col < e_col_offset && i < total; ++col, ++i) {
+            c = editor_get_char(i);
+            if (c == NL) break;            
         }
+        for (col = 0; col < COLS && i < total; ++col, ++i) {
+            c = editor_get_char(i);            
+            if (c == NL) break;
+            if (e_mark_start != -1) {
+                if (i >= mark_from && i < mark_to)
+                    highlight();
+                else
+                    standard();
+            }
+            putch(c);            
+        }   
+        while (i<total && (c = editor_get_char(i)) != NL) ++i;     
+        if (c == NL) {
+            clreol();
+            putch(NL);
+        } 
         if (i == total) clreol();
     }
     // Standard attribute, needed when the marker runs to the end 

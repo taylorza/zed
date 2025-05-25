@@ -7,9 +7,9 @@ ZCC     = zcc
 ASM     = z80asm
 
 MAX_ALLOCS = 200000
-CFLAGS = -m -c -clib=sdcc_iy -SO3 -opt-code-size --max-allocs-per-node$(MAX_ALLOCS) -pragma-include:zpragma.inc
+CFLAGS = --list -m -c -clib=sdcc_iy -SO3 -opt-code-size --max-allocs-per-node$(MAX_ALLOCS) -pragma-include:zpragma.inc
 AFLAGS =
-LFLAGS = -m -startup=30 -clib=sdcc_iy -subtype=dotn -SO3 -opt-code-size --max-allocs-per-node$(MAX_ALLOCS) -pragma-include:zpragma.inc -create-app
+LFLAGS = --list -m -startup=30 -clib=sdcc_iy -subtype=dotn -SO3 -opt-code-size --max-allocs-per-node$(MAX_ALLOCS) -pragma-include:zpragma.inc -create-app
 
 SOURCES = buffers.c crtio.c crtio_s.s editor.c main.c 
 
@@ -51,4 +51,5 @@ link: $(TARGET_BIN)
 clean:
 	@echo "Cleaning generated files..."
 	rm -rf $(OUTPUT_DIR) $(TARGET_BIN)
+	rm -f *.lis
 	@echo "Clean complete."

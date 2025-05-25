@@ -2,6 +2,7 @@
 /zed.map
 /zed_CODE.bin
 /zed_MAIN.bin
+*.lis
 zed
 
 zed.zip
