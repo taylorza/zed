@@ -1,3 +1,6 @@
+2025/05/25 - Version 0.3b
+- Fixed: Specifying a path when opening a file does not work (reported by:Rat Mal)
+
 2025/05/19 - Version 0.3a
 - Added: Cut line (Extend+K/^K)
 

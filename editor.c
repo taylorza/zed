@@ -13,7 +13,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.3a"
+#define VERSION "0.3b"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
@@ -1013,19 +1013,19 @@ void edit(const char* filepath, uint16_t line, uint16_t col) MYCC {
     filename[0] = '\0';
 
     if (filepath) {
-        strncpy(filename, filepath, MAX_FILENAME_LEN);
-
         cat.filter = ESX_CAT_FILTER_SYSTEM | ESX_CAT_FILTER_LFN;
-        cat.filename = p3dos_cstr_to_pstr(filename);
+        p3dos_copy_cstr_to_pstr(filename, filepath);
+        cat.filename = filename;
         cat.cat_sz = 2;
         
         if (esx_dos_catalog(&cat) == 1) {
             lfn.cat = &cat;
             esx_ide_get_lfn(&lfn, &cat.cat[1]);
-        } else {
-            strncpy(filename, filepath, MAX_FILENAME_LEN);
+            char *p = &filepath[0] + strlen(filepath);
+            while (p > &filepath[0] && *(p-1) != '/' && *(p-1) != '\\') --p; 
+            p3dos_copy_pstr_to_cstr(p, filename);            
         }
-        
+        strncpy(filename, filepath, MAX_FILENAME_LEN);
         e_filename = &filename[0];
         editor_init_file();
     }
