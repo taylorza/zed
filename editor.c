@@ -98,6 +98,13 @@ Command commands[] = {
     {NULL, NULL, 0, NULL}
 };
 
+const char *get_filename(const char *path) MYCC {
+    char *s = &path[0];
+    char *p = s + strlen(path);
+    while (p > s && *(p-1) != '/' && *(p-1) != '\\') --p;
+    return p;
+}
+
 uint8_t is_whitespace(char c) MYCC {
     return c == ' ' || c == NL;
 }
@@ -552,7 +559,12 @@ void editor_message(const char* msg) MYCC {
 void editor_update_filename(void) MYCC {
     set_cursor_pos(0, SCREEN_HEIGHT - 1);
     highlight();
-    print("Filename: %s%c", e_filename ? e_filename : "Untitled", e_dirty ? '*' : ' ');
+
+    char offs=0;
+    if (e_filename && strlen(e_filename)>31) {
+      offs = strlen(e_filename) - 31;
+    }
+    print("Filename:%s%s%c", offs?"...":"", e_filename ? e_filename+offs : "Untitled", e_dirty ? '*' : ' ');
     standard();
     clreol();
 }
@@ -793,6 +805,8 @@ void editor_init_file(void) MYCC {
             e_gap_end = TEXT_BUFFER_SIZE - bytescopied;
         }
         esxdos_f_close(f);
+    } else if (errno != 5) {
+        exit(errno);
     }
 #endif
 }
@@ -803,7 +817,8 @@ CommandAction editor_save(void) MYCC {
     e_redraw_mode = REDRAW_CURSOR;
     set_cursor_pos(0, LINES);
 
-    if (!edit_line("File name", NULL, filename, MAX_FILENAME_LEN))
+    char *p = get_filename(filename);
+    if (!edit_line("File name", NULL, p, MAX_FILENAME_LEN))
         return COMMAND_ACTION_CANCEL;
 
     e_filename = &filename[0];
@@ -1021,9 +1036,8 @@ void edit(const char* filepath, uint16_t line, uint16_t col) MYCC {
         if (esx_dos_catalog(&cat) == 1) {
             lfn.cat = &cat;
             esx_ide_get_lfn(&lfn, &cat.cat[1]);
-            char *p = &filepath[0] + strlen(filepath);
-            while (p > &filepath[0] && *(p-1) != '/' && *(p-1) != '\\') --p; 
-            p3dos_copy_pstr_to_cstr(p, filename);            
+            char *p = get_filename(filepath);
+            strcpy(p, filename);            
         }
         strncpy(filename, filepath, MAX_FILENAME_LEN);
         e_filename = &filename[0];
