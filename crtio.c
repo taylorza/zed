@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <intrinsic.h>
 #include <z80.h>
 #include <arch/zxn.h>
 
@@ -227,7 +228,7 @@ char getch(void) MYCC {
     static uint8_t repeat_delay = 0;
     position_caret();
     for(;;) {
-        __asm__("halt");
+        intrinsic_halt();
         ++ticks;
         toggle_caret();
         char key = kbhandler();

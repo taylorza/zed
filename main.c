@@ -4,18 +4,21 @@
 #include <arch/zxn.h>
 
 #include "platform.h"
+#include "buffers.h"
 #include "crtio.h"
 #include "editor.h"
 
 uint8_t oldspeed;
 
 void cleanup(void) {
+    release_buffers();
     screen_restore();
     ZXN_NEXTREGA(0x07, oldspeed);
 }
 
 void init(void) {
     atexit(cleanup);
+    init_buffers();
     oldspeed = ZXN_READ_REG(0x07) & 0x03;
     ZXN_NEXTREG(0x07, 3);
 }
@@ -25,17 +28,17 @@ int main(int argc, char *argv[]) {
     screen_init();
 
     const char *filename = NULL;
-    uint16_t line = 0;
-    uint16_t col = 0;
+    int32_t line = 0;
+    int32_t col = 0;
 
     for (int i=1; i<argc; ++i) {
         if (*argv[i] == '+') {
             char *p = argv[i];
             ++p; // skip '+'
-            line = to_uint16(p, &p);
+            line = to_int32(p, &p);
             if (*p == ',') {
                 ++p; // skip ','
-                col = to_uint16(p, &p);
+                col = to_int32(p, &p);
             }
         } else {
             filename = argv[i];

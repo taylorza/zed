@@ -13,7 +13,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.3b"
+#define VERSION "0.4"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
@@ -21,7 +21,6 @@
 #define LINES SCREEN_HEIGHT-5
 #define COLS 80
 
-#define TEXT_BUFFER_SIZE 24576
 #define AUTO_SAVE_TICKS 6000 // auto save roughly every 2 minutes
 
 #define FLAG_DIRTY 1
@@ -33,8 +32,6 @@
 struct esx_cat cat;
 struct esx_lfn lfn;
 char *filename = &lfn.filename[0];
-
-char text_buffer[TEXT_BUFFER_SIZE];
 
 typedef enum RedrawMode {
     REDRAW_NONE,
@@ -53,20 +50,20 @@ typedef enum CommandAction {
 } CommandAction;
 
 // Editor state
-char* e_filename;         // current filename (null if no filename)
-char* e_buffer;           // the edit buffer (text + gap)    
-int e_gap_start;          // the index of the beginning of the gap (cursor position)
-int e_gap_end;            // one past the end of the gap
-int e_row_offset;         // vertical scrolling offset (first displayed line)
-int e_col_offset;         // horizontal scrolling offset (first displayed column)
-int e_top_row_index;      // top row of the window (in the displayed text)      
-int e_cursor_row;         // current cursor row (in the gap buffer)
-int e_cursor_col;         // current cursor column (in the gap buffer)
-int e_mark_start;         // start of marked text (-1 if none)
-uint16_t e_last_save_tick;// ticks at the time of the last save
-uint8_t e_dirty;          // dirty flag
-uint8_t e_file_too_large; // indicates that the file is too large (disable save)
-RedrawMode e_redraw_mode; // what to redraw    
+char* e_filename;             // current filename (null if no filename)
+int32_t e_length;             //
+int32_t e_gap_start;          // the index of the beginning of the gap (cursor position)
+int32_t e_gap_end;            // one past the end of the gap
+int32_t e_row_offset;         // vertical scrolling offset (first displayed line)
+int32_t e_col_offset;         // horizontal scrolling offset (first displayed column)
+int32_t e_top_row_index;      // top row of the window (in the displayed text)      
+int32_t e_cursor_row;         // current cursor row (in the gap buffer)
+int32_t e_cursor_col;         // current cursor column (in the gap buffer)
+int32_t e_mark_start;         // start of marked text (-1 if none)
+uint16_t e_last_save_tick;    // ticks at the time of the last save
+uint8_t e_dirty;              // dirty flag
+uint8_t e_file_too_large;     // indicates that the file is too large (disable save)
+RedrawMode e_redraw_mode;     // what to redraw 
 
 typedef struct {
     const char* short_cut_key;
@@ -98,10 +95,10 @@ Command commands[] = {
     {NULL, NULL, 0, NULL}
 };
 
-const char *get_filename(const char *path) MYCC {
-    char *s = &path[0];
-    char *p = s + strlen(path);
-    while (p > s && *(p-1) != '/' && *(p-1) != '\\') --p;
+const char* get_filename(const char* path) MYCC {
+    char* s = &path[0];
+    char* p = s + strlen(path);
+    while (p > s && *(p - 1) != '/' && *(p - 1) != '\\') --p;
     return p;
 }
 
@@ -109,8 +106,8 @@ uint8_t is_whitespace(char c) MYCC {
     return c == ' ' || c == NL;
 }
 
-uint16_t to_uint16(const char* s, char** p) MYCC {
-    uint16_t v = 0;
+int32_t to_int32(const char* s, char** p) MYCC {
+    int32_t v = 0;
     while (isdigit(*s)) {
         v = (v * 10) + (*s - '0');
         ++s;
@@ -120,33 +117,40 @@ uint16_t to_uint16(const char* s, char** p) MYCC {
 }
 
 /* Returns the logical length (number of characters) of the text. */
-int editor_length(void) MYCC {
-    return e_gap_start + (TEXT_BUFFER_SIZE - e_gap_end);
+int32_t editor_length(void) MYCC {
+    return e_gap_start + (text_buffer_size - e_gap_end);
 }
 
 /* Returns the i-th character of the text (ignoring the gap). */
-char editor_get_char(int index) MYCC {
+char editor_get_char(int32_t index) MYCC {
     if (index < e_gap_start)
-        return e_buffer[index];
+        return get_text_char(index);
     else
-        return e_buffer[(index - e_gap_start) + e_gap_end];
+        return get_text_char((index - e_gap_start) + e_gap_end);
 }
 
 /* Returns index of the start of the line in the buffer at position 'at'*/
-uint16_t editor_find_line_start(int16_t at) MYCC {
-    int16_t pos = at < 0 ? 0 : at;
-    while (pos > 0 && e_buffer[pos] != NL)
-        --pos;
-    if (e_buffer[pos] == NL) ++pos;
-    return pos;
+int32_t arg_at;
+int32_t arg_len;
+
+uint16_t editor_find_line_start(int32_t at) MYCC {
+    arg_at = at;
+    if (arg_at <= 0) {
+        if (get_text_char(0) == NL) return 1;
+        return 0;
+    }
+    while (arg_at > 0 && get_text_char(arg_at) != NL)
+        --at;
+    if (get_text_char(arg_at) == NL) ++arg_at;
+    return arg_at;
 }
 
 /* Returns index of the end of the line in the buffer at position 'at'*/
-uint16_t editor_find_line_end(int16_t at) MYCC {
-    int total = editor_length();
+uint16_t editor_find_line_end(int32_t at) MYCC {
+    int32_t total = editor_length();
 
-    int pos = at;
-    while (pos < total) {
+    arg_at = at;
+    while (arg_at < total) {
         char c = editor_get_char(pos);
         if (c == NL)
             break;
@@ -160,7 +164,8 @@ void editor_insert(char c) MYCC {
     if (e_gap_start == e_gap_end) {
         return;  // No space to insert.
     }
-    e_buffer[e_gap_start] = c;
+    set_text_char(e_gap_start, c);
+    ++e_length;
     ++e_gap_start;
     if (c != NL) {
         e_cursor_col++;
@@ -183,9 +188,9 @@ void editor_insert_tab(void) MYCC {
 
 /* Insert newline, matching the current lines indent. */
 void editor_insert_newline(void) MYCC {
-    uint16_t pos = editor_find_line_start(e_gap_start - 1);
+    int32_t pos = editor_find_line_start(e_gap_start - 1);
     uint8_t spaces = 0;
-    while (pos < e_gap_start && e_buffer[pos] == ' ') {
+    while (pos < e_gap_start && get_text_char(pos) == ' ') {
         ++spaces;
         ++pos;
     }
@@ -200,15 +205,16 @@ void editor_insert_newline(void) MYCC {
 /* Delete the character to the left of the cursor (if any). */
 void editor_backspace(void) MYCC {
     if (e_gap_start > 0) {
-        char c = e_buffer[--e_gap_start];
+        char c = get_text_char(--e_gap_start);
+        --e_length;
         e_redraw_mode = (c == NL ? REDRAW_ALL : REDRAW_LINE);
         if (c != NL) {
             e_cursor_col--;
         }
         else {
-            int i = e_gap_start - 1;
+            int32_t i = e_gap_start - 1;
             e_cursor_col = 0;
-            while (i >= 0 && e_buffer[i] != NL) {
+            while (i >= 0 && get_text_char(i) != NL) {
                 i--;
                 e_cursor_col++;
             }
@@ -220,7 +226,7 @@ void editor_backspace(void) MYCC {
 
 void editor_update_mark(void) MYCC {
     if (e_mark_start == -1) return;
-    int marklen = abs(e_gap_start - e_mark_start);
+    int32_t marklen = abs(e_gap_start - e_mark_start);
 
     while (marklen > SCRATCH_BUFFER_SIZE && e_mark_start > e_gap_start) {
         --e_mark_start;
@@ -240,16 +246,16 @@ void editor_move_left(void) MYCC {
     if (e_gap_start > 0) {
         --e_gap_start;
         --e_gap_end;
-        e_buffer[e_gap_end] = e_buffer[e_gap_start];
+        set_text_char(e_gap_end, get_text_char(e_gap_start));
 
         e_redraw_mode = REDRAW_CURSOR;
-        if (e_buffer[e_gap_start] != NL) {
+        if (get_text_char(e_gap_start) != NL) {
             e_cursor_col--;
         }
         else {
-            int i = e_gap_start - 1;
+            int32_t i = e_gap_start - 1;
             e_cursor_col = 0;
-            while (i >= 0 && e_buffer[i] != NL) {
+            while (i >= 0 && get_text_char(i) != NL) {
                 i--;
                 e_cursor_col++;
             }
@@ -262,16 +268,16 @@ void editor_move_left(void) MYCC {
 
 /*
  * Move the gap one character to the right.
- * (That is, move one character from after the gap into the gap.)
+ * (That is, move one character from after the gap int32_to the gap.)
  */
 void editor_move_right(void) MYCC {
-    if (e_gap_end < TEXT_BUFFER_SIZE) {
-        e_buffer[e_gap_start] = e_buffer[e_gap_end];
+    if (e_gap_end < text_buffer_size) {
+        set_text_char(e_gap_start, get_text_char(e_gap_end));
         e_gap_start++;
         e_gap_end++;
 
         e_redraw_mode = REDRAW_CURSOR;
-        if (e_buffer[e_gap_start - 1] != NL) {
+        if (get_text_char(e_gap_start - 1) != NL) {
             e_cursor_col++;
         }
         else {
@@ -287,7 +293,7 @@ void editor_move_right(void) MYCC {
  * Reposition the gap (i.e. the cursor) to a given logical text index.
  * This is done by repeated left/right moves.
  */
-void editor_move_cursor_to(int pos) MYCC {
+void editor_move_cursor_to(int32_t pos) MYCC {
     while (e_gap_start > pos) editor_move_left();
     while (e_gap_start < pos) editor_move_right();
 }
@@ -296,8 +302,8 @@ void editor_move_cursor_to(int pos) MYCC {
  * Reposition the gap to the next character after a space
  */
 void editor_move_word(int8_t direction) MYCC {
-    int pos = e_gap_start;
-    int len = editor_length();
+    int32_t pos = e_gap_start;
+    int32_t len = editor_length();
 
     if (direction > 0) {
         // if in the middle of a word move to the end
@@ -337,7 +343,7 @@ void editor_move_word(int8_t direction) MYCC {
  * Compute the cursor's current (row, col) in the text by scanning
  * the characters up to gap_start. (This ignores the text after the gap.)
  */
-void editor_get_cursor_position(int* row, int* col) MYCC {
+void editor_get_cursor_position(int32_t* row, int32_t* col) MYCC {
     *row = e_cursor_row;
     *col = e_cursor_col;
 }
@@ -348,18 +354,18 @@ void editor_get_cursor_position(int* row, int* col) MYCC {
  * at the same column as the current cursor (or the end of the line, whichever comes first).
  */
 void editor_move_up(void) MYCC {
-    int cur_row, cur_col;
+    int32_t cur_row, cur_col;
     editor_get_cursor_position(&cur_row, &cur_col);
     if (cur_row == 0)
         return;  // Already on the first line.
 
-    int16_t current_line_start = editor_find_line_start(e_gap_start - 1);
-    int16_t prev_line_start = editor_find_line_start(current_line_start - 2);
+    int32_t current_line_start = editor_find_line_start(e_gap_start - 1);
+    int32_t prev_line_start = editor_find_line_start(current_line_start - 2);
 
     // Compute previous line’s length.
-    int prev_line_length = current_line_start - 1 - prev_line_start;
-    int target_col = (cur_col < prev_line_length ? cur_col : prev_line_length);
-    int target_pos = prev_line_start + target_col; ;
+    int32_t prev_line_length = current_line_start - 1 - prev_line_start;
+    int32_t target_col = (cur_col < prev_line_length ? cur_col : prev_line_length);
+    int32_t target_pos = prev_line_start + target_col; ;
     editor_move_cursor_to(target_pos);
 }
 
@@ -368,23 +374,23 @@ void editor_move_up(void) MYCC {
  * This finds the next line and moves to the same column (or as far as is available).
  */
 void editor_move_down(void) MYCC {
-    int cur_row, cur_col;
+    int32_t cur_row, cur_col;
     editor_get_cursor_position(&cur_row, &cur_col);
-    int total = editor_length();
+    int32_t total = editor_length();
 
-    int pos = editor_find_line_end(e_gap_start);
+    int32_t pos = editor_find_line_end(e_gap_start);
     if (pos >= total)
         return;  // No next line available.
 
-    int next_line_start = pos + 1;
+    int32_t next_line_start = pos + 1;
     // Determine the length of the next line.
-    int next_line_length = 0;
+    int32_t next_line_length = 0;
     while (next_line_start + next_line_length < total &&
         editor_get_char(next_line_start + next_line_length) != NL) {
         next_line_length++;
     }
-    int target_col = (cur_col < next_line_length ? cur_col : next_line_length);
-    int target_pos = next_line_start + target_col;
+    int32_t target_col = (cur_col < next_line_length ? cur_col : next_line_length);
+    int32_t target_pos = next_line_start + target_col;
     editor_move_cursor_to(target_pos);
 }
 
@@ -393,11 +399,11 @@ void editor_move_down(void) MYCC {
  * based on the current cursor position so that the cursor stays visible.
  */
 void editor_update_scroll(void) MYCC {
-    int cursor_row, cursor_col;
+    int32_t cursor_row, cursor_col;
     editor_get_cursor_position(&cursor_row, &cursor_col);
 
-    int old_row_offset = e_row_offset;
-    int old_col_offset = e_col_offset;
+    int32_t old_row_offset = e_row_offset;
+    int32_t old_col_offset = e_col_offset;
     // Vertical scrolling:
     if (cursor_row < e_row_offset)
         e_row_offset = cursor_row;
@@ -406,16 +412,16 @@ void editor_update_scroll(void) MYCC {
 
     // Horizontal scrolling:
     if (cursor_col <= e_col_offset)
-        e_col_offset = cursor_col >= 4 ? cursor_col-4 : 0;
+        e_col_offset = cursor_col >= 4 ? cursor_col - 4 : 0;
     else if (cursor_col >= e_col_offset + COLS)
         e_col_offset = cursor_col - COLS + 4;
 
     // If the offsets have changed, redraw the screen.
     if (e_row_offset != old_row_offset || e_col_offset != old_col_offset) {
-        int lines_to_scroll = abs(e_row_offset - old_row_offset);
+        int32_t lines_to_scroll = abs(e_row_offset - old_row_offset);
         if (e_row_offset > old_row_offset) {
             while (lines_to_scroll && e_top_row_index < e_gap_start) {
-                char c = e_buffer[e_top_row_index];
+                char c = editor_get_char(e_top_row_index);
                 if (c == NL) {
                     --lines_to_scroll;
                 }
@@ -424,14 +430,14 @@ void editor_update_scroll(void) MYCC {
         }
         else if (e_row_offset < old_row_offset) {
             while (lines_to_scroll && e_top_row_index > 0) {
-                char c = e_buffer[e_top_row_index - 1];
+                char c = editor_get_char(e_top_row_index - 1);
                 if (c == NL) {
                     --lines_to_scroll;
                 }
                 --e_top_row_index;
             }
             // move to start of the line
-            while (e_top_row_index > 0 && e_buffer[e_top_row_index - 1] != NL) {
+            while (e_top_row_index > 0 && editor_get_char(e_top_row_index - 1) != NL) {
                 --e_top_row_index;
             }
         }
@@ -440,11 +446,11 @@ void editor_update_scroll(void) MYCC {
     }
 }
 
-void update_hardware_cursor(int cursor_col, int cursor_row) MYCC 
+void update_hardware_cursor(int32_t cursor_col, int32_t cursor_row) MYCC
 {
     // Place the hardware cursor in the proper on-screen position.
-    int screen_cursor_row = cursor_row - e_row_offset;
-    int screen_cursor_col = cursor_col - e_col_offset;
+    int32_t screen_cursor_row = cursor_row - e_row_offset;
+    int32_t screen_cursor_col = cursor_col - e_col_offset;
     if (screen_cursor_row >= 0 && screen_cursor_row < LINES - 1 &&
         screen_cursor_col >= 0 && screen_cursor_col < COLS)
         set_cursor_pos(screen_cursor_col, screen_cursor_row);
@@ -453,18 +459,18 @@ void update_hardware_cursor(int cursor_col, int cursor_row) MYCC
 }
 
 void editor_draw_line(void) MYCC {
-    int i = e_gap_start;
-    while (i > 0 && e_buffer[i - 1] != NL)
+    int32_t i = e_gap_start;
+    while (i > 0 && get_text_char(i - 1) != NL)
         i--;
 
     uint8_t cx, cy; // cursor position
     get_cursor_pos(&cx, &cy);
     (cx);
 
-    int total = editor_length();
+    int32_t total = editor_length();
     set_cursor_pos(0, cy);
-    int col_offset = e_col_offset;
-    for (int col = 0; col < COLS + col_offset && i < total; ++col, ++i) {
+    int32_t col_offset = e_col_offset;
+    for (int32_t col = 0; col < COLS + col_offset && i < total; ++col, ++i) {
         char c = editor_get_char(i);
         if (c == NL) break;
         if (col >= col_offset) putch(c);
@@ -476,34 +482,34 @@ void editor_draw_line(void) MYCC {
 
 /*
  * Draw the contents of the gap buffer on the screen.
- * We “reassemble” the text (ignoring the gap) into lines. A reserved status line
+ * We “reassemble” the text (ignoring the gap) int32_to lines. A reserved status line
  * is drawn at the bottom.
  */
 void editor_draw(void) MYCC {
-    int total = editor_length();
-    int i = e_top_row_index;
+    int32_t total = editor_length();
+    int32_t i = e_top_row_index;
 
     set_cursor_pos(0, 0);
-    
+
     if (e_mark_start != -1) editor_update_mark();
 
-    static int row;
-    static int col;
+    static int32_t row;
+    static int32_t col;
     static char c;
-    static int mark_from;
-    static int mark_to;
+    static int32_t mark_from;
+    static int32_t mark_to;
 
     mark_from = e_mark_start <= e_gap_start ? e_mark_start : e_gap_start;
-    mark_to   = e_mark_start >= e_gap_start ? e_mark_start : e_gap_start;
-    
+    mark_to = e_mark_start >= e_gap_start ? e_mark_start : e_gap_start;
+
     standard();
     for (row = 0; row < LINES - 1 && i < total; ++row, ++i) {
-        for(col = 0; col < e_col_offset && i < total; ++col, ++i) {
+        for (col = 0; col < e_col_offset && i < total; ++col, ++i) {
             c = editor_get_char(i);
-            if (c == NL) break;            
+            if (c == NL) break;
         }
         for (col = 0; col < COLS && i < total; ++col, ++i) {
-            c = editor_get_char(i);            
+            c = editor_get_char(i);
             if (c == NL) break;
             if (e_mark_start != -1) {
                 if (i >= mark_from && i < mark_to)
@@ -511,13 +517,13 @@ void editor_draw(void) MYCC {
                 else
                     standard();
             }
-            putch(c);            
-        }   
-        while (i<total && (c = editor_get_char(i)) != NL) ++i;     
+            putch(c);
+        }
+        while (i < total && (c = editor_get_char(i)) != NL) ++i;
         if (c == NL) {
             clreol();
             putch(NL);
-        } 
+        }
         if (i == total) clreol();
     }
     // Standard attribute, needed when the marker runs to the end 
@@ -546,17 +552,17 @@ void editor_update_filename(void) MYCC {
     set_cursor_pos(0, SCREEN_HEIGHT - 1);
     highlight();
 
-    char offs=0;
-    if (e_filename && strlen(e_filename)>31) {
-      offs = strlen(e_filename) - 31;
+    char offs = 0;
+    if (e_filename && strlen(e_filename) > 31) {
+        offs = strlen(e_filename) - 31;
     }
-    print("Filename:%s%s%c", offs?"...":"", e_filename ? e_filename+offs : "Untitled", e_dirty ? '*' : ' ');
+    print("%s%s%c", offs ? "..." : "", e_filename ? e_filename + offs : "Untitled", e_dirty ? '*' : ' ');
     standard();
     clreol();
 }
 
 void editor_print_hotkey(const char* short_cut_key, const char* description) MYCC {
-    int len = HOTKEY_ITEM_WIDTH - (strlen(short_cut_key) + strlen(description));
+    int32_t len = HOTKEY_ITEM_WIDTH - (strlen(short_cut_key) + strlen(description));
     highlight(); print(short_cut_key); standard();
     print(" %s", description);
     while (len-- > 0) putch(' ');
@@ -564,7 +570,7 @@ void editor_print_hotkey(const char* short_cut_key, const char* description) MYC
 
 void editor_show_hotkeys(void) MYCC {
     set_cursor_pos(0, LINES + 1);
-    int i = 0;
+    int32_t i = 0;
     for (Command* cmd = &commands[0]; cmd->short_cut_key != NULL; ++cmd) {
         editor_print_hotkey(cmd->short_cut_key, cmd->description);
         if (++i % HOTKEY_ITEMS_PER_LINE == 0) putch(NL);
@@ -575,9 +581,9 @@ void editor_show_hotkeys(void) MYCC {
 
 void editor_update_status(char key) MYCC {
     static uint8_t wasdirty = 0;
-    int total = editor_length();
+    int32_t total = editor_length();
 
-    int cursor_row, cursor_col;
+    int32_t cursor_row, cursor_col;
     uint8_t ox, oy;
     get_cursor_pos(&ox, &oy);
     editor_get_cursor_position(&cursor_row, &cursor_col);
@@ -586,8 +592,8 @@ void editor_update_status(char key) MYCC {
         wasdirty = e_dirty;
         editor_update_filename();
     }
-    set_cursor_pos(45, SCREEN_HEIGHT - 1);
-    print("Mem: %d Ln %d, Col %d Key: %d", TEXT_BUFFER_SIZE - total, cursor_row + 1, cursor_col + 1, key);
+    set_cursor_pos(40, SCREEN_HEIGHT - 1);
+    print("Mem: %ld Ln %ld, Col %ld Key: %d", text_buffer_size - total, cursor_row + 1, cursor_col + 1, key);
     clreol();
     set_cursor_pos(ox, oy);
 }
@@ -606,7 +612,7 @@ void editor_redraw(void) MYCC {
         editor_draw_line();
     }
 
-    int cursor_row, cursor_col;
+    int32_t cursor_row, cursor_col;
     editor_get_cursor_position(&cursor_row, &cursor_col);
     update_hardware_cursor(cursor_col, cursor_row);
 }
@@ -692,14 +698,16 @@ uint8_t edit_line(const char* prompt, const char* alphabet, char* buffer, uint8_
     return retval;
 }
 
-int editor_save_file(uint8_t temp) MYCC {
+int32_t editor_save_file(uint8_t temp) MYCC {
     e_last_save_tick = get_ticks();
 
     if (e_file_too_large) return 0;
 
     editor_message("Saving...");
 
-    char buf[32];
+#define SAVE_BUF_SIZE 64
+    char buf[SAVE_BUF_SIZE];
+
 #ifdef __ZXNEXT
     errno = 0;
     strcpy(tmpbuffer, e_filename);
@@ -709,15 +717,15 @@ int editor_save_file(uint8_t temp) MYCC {
         strcat(tmpbuffer, ".zed");
     char f = esxdos_f_open(tmpbuffer, ESXDOS_MODE_W | ESXDOS_MODE_CT);
     if (errno) return errno;
-
-    int total = editor_length();
-    int i = 0;
+    
+    int32_t total = editor_length();
+    int32_t i = 0;
     while (i < total) {
-        int j = 0;
-        while (j < sizeof(buf) >> 1 && i < total) {
+        int j = 0;        
+        while (j < (SAVE_BUF_SIZE>>1) && i < total) {
             char ch = editor_get_char(i++);
             buf[j++] = ch;
-            if (ch == '\r') buf[j++] = '\n';
+            if (ch == '\r') buf[j++] = '\n';            
         }
         esxdos_f_write(f, buf, j);
         if (errno) {
@@ -731,6 +739,33 @@ int editor_save_file(uint8_t temp) MYCC {
         if (esx_f_rename(tmpbuffer, e_filename)) return errno;
         esx_f_unlink(tmpbuffer);
     }
+#else
+    errno = 0;
+    strcpy(tmpbuffer, e_filename);
+    if (temp)
+        strcat(tmpbuffer, ".bak");
+    else
+        strcat(tmpbuffer, ".zed");
+    //char f = esxdos_f_open(tmpbuffer, ESXDOS_MODE_W | ESXDOS_MODE_CT);
+    if (errno) return errno;
+
+    int32_t total = editor_length();
+    int32_t i = 0;
+    while (i < total) {
+        char* p = get_text_ptr(i);
+        int j = 0;
+        while (j < sizeof(buf) >> 1 && i < total) {
+            char ch = *p++; i++;
+            buf[j++] = ch;
+            if (ch == '\r') buf[j++] = '\n';
+        }
+        //esxdos_f_write(f, buf, j);
+        if (errno) {
+            //esxdos_f_close(f);
+            return errno;
+        }
+    }
+   
 #endif //__ZXNEXT
     editor_message(NULL);
     return 0;
@@ -739,58 +774,154 @@ int editor_save_file(uint8_t temp) MYCC {
 void editor_init_file(void) MYCC {
 #ifdef __ZXNEXT
     errno = 0;
+    editor_message("Loading...");
     char f = esxdos_f_open(filename, ESXDOS_MODE_R | ESXDOS_MODE_OE);
     if (!errno) {
-        size_t bytes_read = esxdos_f_read(f, e_buffer, TEXT_BUFFER_SIZE);
+        int32_t total_bytes_read = 0;
 
-        e_file_too_large = (bytes_read == TEXT_BUFFER_SIZE);
-        if (bytes_read > 0) {
-            char* start = &e_buffer[0];
+        while (total_bytes_read < text_buffer_size) {
+            char* pwork = get_text_ptr(total_bytes_read);
+            size_t bytes_read = esxdos_f_read(f, pwork, 8192);
+            if (bytes_read <= 0) break;
+            total_bytes_read += bytes_read;
+        }
+        e_file_too_large = (total_bytes_read >= text_buffer_size);
 
-            char* src = (char*)(start + bytes_read - 1);
-            char* dst = (char*)(start + TEXT_BUFFER_SIZE - 1);
-            uint16_t bytescopied = 0;
-            char skip_eol_char = 0;
-            char lead_eol_char = 0;
-            while (src >= start) {
-                char ch = *src;
-                if (!skip_eol_char) {
-                    switch (ch) {
-                        case '\r':
-                            lead_eol_char = '\r';
-                            skip_eol_char = '\n';
-                            break;
-                        case '\n':
-                            lead_eol_char = '\n';
-                            skip_eol_char = '\r';
-                            break;
+        typedef enum {
+            LINE_ENDING_NONE = -1,
+            LINE_ENDING_CR = 0,
+            LINE_ENDING_LF = 1,
+            LINE_ENDING_CRLF = 2
+        } LINE_ENDING_STYLE;
+
+        LINE_ENDING_STYLE line_ending_style = LINE_ENDING_NONE;
+        if (total_bytes_read > 0) {
+            // Check the line ending style
+            for (int32_t i = 0; i < total_bytes_read; ++i) {
+                char ch = get_text_char(i);
+                if (ch == '\r') {
+                    line_ending_style = LINE_ENDING_CR;
+                    if (i + 1 < total_bytes_read && get_text_char(i + 1) == '\n') {
+                        line_ending_style = LINE_ENDING_CRLF;                        
                     }
+                    break;
                 }
+                else if (ch == '\n') {
+                    line_ending_style = LINE_ENDING_LF;
+                    break; // LF found, no need to check further
+                }
+            }
+        
+            int32_t src = total_bytes_read - 1;
+            int32_t dst = text_buffer_size - 1;
+            int32_t bytescopied = 0;
+            while (src >= 0) {
+                char ch = get_text_char(src);
+                
                 if (ch == '\t') {
-                    if (dst - 2 < start) {
+                    if (dst - 2 < 0) {
                         e_file_too_large = 1;
                         break;
                     }
-                    *dst-- = ' ';
-                    *dst-- = ' ';
+                    set_text_char(dst--, ' ');
+                    set_text_char(dst--, ' ');
                     bytescopied += 2;
                 }
-                else if (ch != skip_eol_char) {
-                    if (dst - 1 < start) {
+                else if (ch == '\n' || ch == '\r') {
+                    if (line_ending_style == LINE_ENDING_CRLF) {
+                        --src;
+                    }
+                    set_text_char(dst--, NL);
+                    ++bytescopied;
+                }
+                else {
+                    set_text_char(dst--, ch);
+                    ++bytescopied;
+                }
+                --src;
+            }
+            e_length = bytescopied;
+            e_gap_start = 0;
+            e_gap_end = text_buffer_size - bytescopied;
+        }
+        esxdos_f_close(f);
+    }
+    else if (errno != 5) {
+        exit(errno);
+    }
+#else
+    errno = 0;
+    FILE* f = fopen(filename, "rb");
+    if (!errno) {
+        int32_t total_bytes_read = 0;
+
+        while (total_bytes_read < text_buffer_size) {
+            char* pwork = get_text_ptr(total_bytes_read);
+            size_t bytes_read = fread(pwork, 1, 8192, f);
+            if (bytes_read <= 0) break;
+            total_bytes_read += bytes_read;
+        }
+        e_file_too_large = (total_bytes_read >= text_buffer_size);
+
+        typedef enum {
+            LINE_ENDING_NONE = -1,
+            LINE_ENDING_CR = 0,
+            LINE_ENDING_LF = 1,
+            LINE_ENDING_CRLF = 2
+        } LINE_ENDING_STYLE;
+
+        LINE_ENDING_STYLE line_ending_style = LINE_ENDING_NONE;
+        if (total_bytes_read > 0) {
+            // Check the line ending style
+            for (int32_t i = 0; i < total_bytes_read; ++i) {
+                char ch = get_text_char(i);
+                if (ch == '\r') {
+                    line_ending_style = LINE_ENDING_CR;
+                    if (i + 1 < total_bytes_read && get_text_char(i + 1) == '\n') {
+                        line_ending_style = LINE_ENDING_CRLF;
+                        break; // CRLF found, no need to check further
+                    }
+                }
+                else if (ch == '\n') {
+                    line_ending_style = LINE_ENDING_LF;
+                    break; // LF found, no need to check further
+                }
+            }
+        
+            int32_t src = total_bytes_read - 1;
+            int32_t dst = text_buffer_size - 1;
+            int32_t bytescopied = 0;
+            while (src >= 0) {
+                char ch = get_text_char(src);
+                
+                if (ch == '\t') {
+                    if (dst - 2 < 0) {
                         e_file_too_large = 1;
                         break;
                     }
-                    if (lead_eol_char && ch == lead_eol_char) ch = NL;
-                    *dst-- = ch;
+                    set_text_char(dst--, ' ');
+                    set_text_char(dst--, ' ');
+                    bytescopied += 2;
+                }
+                else if (ch == '\n' || ch == '\r') {
+                    if (line_ending_style == LINE_ENDING_CRLF) {
+                        --src;
+                    }
+                    set_text_char(dst--, NL);
+                    ++bytescopied;
+                }
+                else {
+                    set_text_char(dst--, ch);
                     ++bytescopied;
                 }
                 --src;
             }
             e_gap_start = 0;
-            e_gap_end = TEXT_BUFFER_SIZE - bytescopied;
+            e_gap_end = text_buffer_size - bytescopied;
         }
-        esxdos_f_close(f);
-    } else if (errno != 5) {
+        fclose(f);
+    }
+    else if (errno != 5) {
         exit(errno);
     }
 #endif
@@ -802,12 +933,12 @@ CommandAction editor_save(void) MYCC {
     e_redraw_mode = REDRAW_CURSOR;
     set_cursor_pos(0, LINES);
 
-    char *p = get_filename(filename);
+    char* p = get_filename(filename);
     if (!edit_line("File name", NULL, p, MAX_FILENAME_LEN))
         return COMMAND_ACTION_CANCEL;
 
     e_filename = &filename[0];
-    int status = editor_save_file(0);
+    int32_t status = editor_save_file(0);
     if (status) {
 #ifdef __ZXNEXT
         esx_m_geterr(status, tmpbuffer);
@@ -826,7 +957,7 @@ void editor_autosave(void) MYCC {
 
     // reset autosave flag and save backup
     e_dirty &= MASK_AUTOSAVE;
-    int status = editor_save_file(1);
+    int32_t status = editor_save_file(1);
 #ifdef __ZXNEXT
     if (status) {
         esx_m_geterr(status, tmpbuffer);
@@ -845,11 +976,11 @@ CommandAction editor_mark(void) MYCC {
     return COMMAND_ACTION_NONE;
 }
 
-void editor_cutcopy(uint8_t cut, int start, int end) MYCC {
-    int len = end - start;
+void editor_cutcopy(uint8_t cut, int32_t start, int32_t end) MYCC {
+    int32_t len = end - start;
 
     // Copy marked text
-    for (int i = 0; i < len && i < SCRATCH_BUFFER_SIZE; ++i) {
+    for (int32_t i = 0; i < len && i < SCRATCH_BUFFER_SIZE; ++i) {
         scratch_buffer[i] = editor_get_char(start + i);
     }
     scratch_buffer[len] = '\0';
@@ -858,7 +989,7 @@ void editor_cutcopy(uint8_t cut, int start, int end) MYCC {
         // Cut marked text by deleting character by character from
         // the end of the marker to the begining
         editor_move_cursor_to(end);
-        for (int i = 0; i < len; ++i) {
+        for (int32_t i = 0; i < len; ++i) {
             editor_backspace();
         }
     }
@@ -869,8 +1000,8 @@ void editor_cutcopy(uint8_t cut, int start, int end) MYCC {
 
 CommandAction editor_copy(void) MYCC {
     if (e_mark_start == -1) return COMMAND_ACTION_NONE;
-    int start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
-    int end = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
+    int32_t start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
+    int32_t end = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
 
     editor_cutcopy(0, start, end);
     return COMMAND_ACTION_NONE;
@@ -878,15 +1009,15 @@ CommandAction editor_copy(void) MYCC {
 
 CommandAction editor_cut(void) MYCC {
     if (e_mark_start == -1) return COMMAND_ACTION_NONE;
-    int start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
-    int end = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
+    int32_t start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
+    int32_t end = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
     editor_cutcopy(1, start, end);
     return COMMAND_ACTION_NONE;
 }
 
 CommandAction editor_paste(void) MYCC {
     char* src = scratch_buffer;
-    for (int i = 0; *src && i < SCRATCH_BUFFER_SIZE; ++i) {
+    for (int32_t i = 0; *src && i < SCRATCH_BUFFER_SIZE; ++i) {
         editor_insert(*src++);
     }
     e_mark_start = -1;
@@ -895,21 +1026,21 @@ CommandAction editor_paste(void) MYCC {
 }
 
 CommandAction editor_cutline(void) MYCC {
-    int start = editor_find_line_start(e_gap_start-1);
-    int end = editor_find_line_end(e_gap_start);
+    int32_t start = editor_find_line_start(e_gap_start - 1);
+    int32_t end = editor_find_line_end(e_gap_start);
     if (editor_get_char(end) == NL) ++end;
     editor_cutcopy(1, start, end);
     return COMMAND_ACTION_NONE;
 }
 
-int editor_search(const char* str, int start) MYCC {
-    int len = strlen(str);
-    int total = editor_length();
+int32_t editor_search(const char* str, int32_t start) MYCC {
+    int32_t len = strlen(str);
+    int32_t total = editor_length();
     if (start < 0 || start >= total) {
         start = 0;
     }
-    for (int i = start; i < total - len; ++i) {
-        for (int j = 0; j < len; ++j) {
+    for (int32_t i = start; i < total - len; ++i) {
+        for (int32_t j = 0; j < len; ++j) {
             if (editor_get_char(i + j) != str[j]) {
                 break;
             }
@@ -925,10 +1056,10 @@ CommandAction editor_find(void) MYCC {
     static char input[32] = { 0 };
     set_cursor_pos(0, LINES);
     while (edit_line("Find", NULL, input, sizeof(input))) {
-        int len = strlen(input);
-        int total = editor_length();
+        int32_t len = strlen(input);
+        int32_t total = editor_length();
 
-        int i = editor_search(input, e_gap_start);
+        int32_t i = editor_search(input, e_gap_start);
         if (i == -1) i = editor_search(input, 0);
 
         if (i != -1) {
@@ -947,14 +1078,14 @@ CommandAction editor_find(void) MYCC {
 }
 
 void editor_gotoline(uint16_t line, uint16_t col) MYCC {
-    int total = editor_length();
-    int i = 0;
-    for (int j = 1; j < line && i < total; ++j) {
+    int32_t total = editor_length();
+    int32_t i = 0;
+    for (int32_t j = 1; j < line && i < total; ++j) {
         while (i < total && editor_get_char(i) != NL)
             ++i;
         ++i;
     }
-    int c = 1;
+    int32_t c = 1;
     while (c < col && i < total && editor_get_char(i) != NL) {
         ++c;
         ++i;
@@ -966,7 +1097,7 @@ CommandAction editor_goto(void) MYCC {
     char input[8] = { 0 };
     set_cursor_pos(0, LINES);
     if (edit_line("Line number", "1234567890", input, sizeof(input))) {
-        int lineno = to_uint16(input, NULL);
+        int32_t lineno = to_int32(input, NULL);
         editor_gotoline(lineno, 0);
     }
     return COMMAND_ACTION_NONE;
@@ -994,12 +1125,12 @@ CommandAction editor_quit(void) MYCC {
     return COMMAND_ACTION_NONE;
 }
 
-void edit(const char* filepath, uint16_t line, uint16_t col) MYCC {
+void edit(const char* filepath, int32_t line, int32_t col) MYCC {
     /* Initial the editor; the entire space is initially the gap. */
-    e_buffer = &text_buffer[0];
     e_filename = NULL;
+    e_length = 0;
     e_gap_start = 0;
-    e_gap_end = TEXT_BUFFER_SIZE;
+    e_gap_end = text_buffer_size;
     e_row_offset = 0;
     e_col_offset = 0;
     e_top_row_index = 0;
@@ -1014,17 +1145,19 @@ void edit(const char* filepath, uint16_t line, uint16_t col) MYCC {
     filename[0] = '\0';
 
     if (filepath) {
+#ifdef __ZXNEXT
         cat.filter = ESX_CAT_FILTER_SYSTEM | ESX_CAT_FILTER_LFN;
         p3dos_copy_cstr_to_pstr(filename, filepath);
         cat.filename = filename;
         cat.cat_sz = 2;
-        
+
         if (esx_dos_catalog(&cat) == 1) {
             lfn.cat = &cat;
             esx_ide_get_lfn(&lfn, &cat.cat[1]);
-            char *p = get_filename(filepath);
-            strcpy(p, filename);            
-        }
+            char* p = get_filename(filepath);
+            strcpy(p, filename);
+        }        
+#endif //__ZXNEXT 
         strncpy(filename, filepath, MAX_FILENAME_LEN);
         e_filename = &filename[0];
         editor_init_file();
@@ -1056,14 +1189,14 @@ void edit(const char* filepath, uint16_t line, uint16_t col) MYCC {
                 editor_move_right();
                 break;
             case KEY_PAGEUP:
-                for (int i = 0; i < LINES - 2; ++i)
+                for (int32_t i = 0; i < LINES - 2; ++i)
                     editor_move_up();
                 break;
             case KEY_UP:
                 editor_move_up();
                 break;
             case KEY_PAGEDOWN:
-                for (int i = 0; i < LINES - 2; ++i)
+                for (int32_t i = 0; i < LINES - 2; ++i)
                     editor_move_down();
                 break;
             case KEY_DOWN:
@@ -1103,4 +1236,3 @@ void edit(const char* filepath, uint16_t line, uint16_t col) MYCC {
         }
     }
 }
-

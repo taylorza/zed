@@ -3,7 +3,7 @@
 //#pragma output REGISTER_SP = xxxx
 
 // limit size of stdio
-#pragma printf = %s %c %d
+#pragma printf = %s %c %d %ld
 
 // room for one atexit function
 #pragma output CLIB_EXIT_STACK_SIZE = 1
