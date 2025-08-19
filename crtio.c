@@ -66,13 +66,16 @@ const uint8_t ext[] = {
 
 char * const screen = (char * const)START_MAP;
 
+uint8_t old_reg_4b;
 uint8_t old_reg_6b;
 uint8_t old_reg_15;
+
 uint8_t old_border;
 
 uint8_t cx = 0;         // caret X
 uint8_t cy = 0;         // caret Y
 uint8_t attr = 0;       // current attribute
+uint8_t capslock = 0;   // is caplock engaged
 
 uint16_t ticks;         // internal ticker to track
 
@@ -93,15 +96,19 @@ void update_caret(void) MYCC;
 void screen_init(void) MYCC {
     cx = 0;
     cy = 0;
+    old_reg_4b = ZXN_READ_REG(0x4b);
     old_reg_6b = ZXN_READ_REG(0x6b);
     old_reg_15 = ZXN_READ_REG(0x15);
     old_border = ((*(uint8_t*)(0x5c48)) & 0b00111000) >> 3;
 
     zx_border(1);
     // Sprite palette
+    ZXN_NEXTREG(0x4b, 0xe3);            // Transparency index
     ZXN_NEXTREG(0x43, 0b00100000);      // Sprite palette 1 auto increment
     ZXN_NEXTREG(0x40, 0);             
-    ZXN_NEXTREG(0x41, 0b11001111);      // 0-Purple
+    ZXN_NEXTREG(0x41, 0b11001111);      // 0-Magenta
+    ZXN_NEXTREG(0x40, 16);
+    ZXN_NEXTREG(0x41, 0b11111111);      // 16-Black
 
     // Tilemap palette
     ZXN_NEXTREG(0x43, 0b00110000);      // Tilemap palette 1 auto increment
@@ -149,6 +156,7 @@ void screen_restore(void) MYCC {
     hide_caret();
     ZXN_NEXTREGA(0x6b, old_reg_6b);
     ZXN_NEXTREGA(0x15, old_reg_15);
+    ZXN_NEXTREGA(0x4b, old_reg_4b);
     zx_border(old_border);
 }
 
@@ -178,6 +186,14 @@ void putch(char ch) MYCC {
     *p++ = ch - 32;
     *p = attr;
     ++cx;  
+}
+ 
+void putch_at(uint8_t x, uint8_t y, char ch) MYCC {
+    if (x >= SCREEN_WIDTH) x = SCREEN_WIDTH-1;
+    if (y >= SCREEN_HEIGHT) y = SCREEN_HEIGHT-1;
+    char * p = screen+(((y*SCREEN_WIDTH) + x) << 1);
+    *p++ = ch - 32;
+    *p = attr;
 }
 
 void clreol(void) MYCC {
@@ -232,6 +248,7 @@ char getch(void) MYCC {
         ++ticks;
         toggle_caret();
         char key = kbhandler();
+        
         if (!key) {
             lastkey = 0;
             repeating = 0;
@@ -240,6 +257,11 @@ char getch(void) MYCC {
         if (key != lastkey) {
             lastkey = key;
             repeat_delay = 0;
+            if (key == 2) {
+                capslock = !capslock;
+                continue;
+            }
+            if (capslock && key >= 'a' && key <= 'z') key -= 0x20;
             return key;
         } else {
             ++repeat_delay;
@@ -268,7 +290,7 @@ void update_caret(void) MYCC {
     ZXN_NEXTREG(0x34, 0);
     ZXN_NEXTREGA(0x35, caret_state[0]);
     ZXN_NEXTREGA(0x36, caret_state[1]);
-    ZXN_NEXTREGA(0x37, caret_state[2]);
+    ZXN_NEXTREGA(0x37, (capslock<<4) | caret_state[2]);
     ZXN_NEXTREGA(0x38, caret_state[3]);
     ZXN_NEXTREGA(0x39, caret_state[4]);
 }

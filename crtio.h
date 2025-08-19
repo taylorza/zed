@@ -8,7 +8,7 @@
 
 #define KEY_TAB         0x04
 #define KEY_ESC         0x01
-
+#define KEY_CAPSLOCK    0x02
 #define KEY_LEFT        0x05
 #define KEY_DOWN        0x06
 #define KEY_UP          0x07
@@ -44,6 +44,7 @@ void cls(void) MYCC;
 void clreol(void) MYCC;
 
 void putch(char ch) MYCC;
+void putch_at(uint8_t x, uint8_t y, char ch) MYCC;
 void print(const char *fmt, ...) MYCC;
 char getch(void) MYCC;
 
