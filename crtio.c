@@ -202,6 +202,10 @@ void clreol(void) MYCC {
     memset(p, 0, (SCREEN_WIDTH - cx) << 1);    
 }
 
+void gotosol(void) MYCC {
+    cx = 0;
+}
+
 void print(const char *fmt, ...) MYCC {
     char buf[80];
     va_list v;

@@ -42,6 +42,7 @@ void toggle_caret(void) MYCC;
 
 void cls(void) MYCC;
 void clreol(void) MYCC;
+void gotosol(void) MYCC;
 
 void putch(char ch) MYCC;
 void putch_at(uint8_t x, uint8_t y, char ch) MYCC;
