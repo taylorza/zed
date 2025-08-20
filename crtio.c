@@ -261,7 +261,7 @@ char getch(void) MYCC {
         if (key != lastkey) {
             lastkey = key;
             repeat_delay = 0;
-            if (key == 2) {
+            if (key == KEY_CAPSLOCK) {
                 capslock = !capslock;
                 continue;
             }
