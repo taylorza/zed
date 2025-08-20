@@ -265,13 +265,20 @@ char getch(void) MYCC {
                 capslock = !capslock;
                 continue;
             }
-            if (capslock && key >= 'a' && key <= 'z') key -= 0x20;
+            if (capslock){
+                if (key >= 'a' && key <= 'z') key -= 0x20;
+                else if (key >= 'A' && key <= 'Z') key += 0x20;
+            }
             return key;
         } else {
             ++repeat_delay;
             if (repeat_delay < REPEAT_DELAY) continue;
             if (repeat_delay < REPEAT_DELAY+REPEAT_RATE) continue;
             repeat_delay = REPEAT_DELAY;
+            if (capslock){
+                if (key >= 'a' && key <= 'z') key -= 0x20;
+                else if (key >= 'A' && key <= 'Z') key += 0x20;
+            }
             return key;
         }
     }  
