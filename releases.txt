@@ -1,3 +1,7 @@
+2025/08/19 - Version 0.4
+- Support for large files up to max available memory
+- Performance optimizations
+
 2025/05/25 - Version 0.3b
 - Fixed: Specifying a path when opening a file does not work (reported by:Rat Mal)
 - Improved: Horizontal scrolling

@@ -11,7 +11,7 @@ CFLAGS = --list -m -c -clib=sdcc_iy -SO3 -opt-code-size --max-allocs-per-node$(M
 AFLAGS =
 LFLAGS = --list -m -startup=30 -clib=sdcc_iy -subtype=dotn -SO3 -opt-code-size --max-allocs-per-node$(MAX_ALLOCS) -pragma-include:zpragma.inc -create-app
 
-SOURCES = buffers.c crtio.c crtio_s.s editor.c main.c 
+SOURCES = buffers.c buffers_s.asm crtio.c crtio_s.asm editor.c main.c 
 
 OBJFILES = $(patsubst %.c,$(OUTPUT_DIR)/%.o,$(SOURCES))
 
@@ -22,12 +22,12 @@ all: compile link
 $(OUTPUT_DIR):
 	mkdir $(OUTPUT_DIR)
 
-$(OUTPUT_DIR)/buffers.o: buffers.c | $(OUTPUT_DIR)
+$(OUTPUT_DIR)/buffers.o: buffers.c buffers_s.asm | $(OUTPUT_DIR)
 	@echo "Compiling $<"
 	$(ZCC) $(TARGET) $(CFLAGS) $< -o $@ --datasegcode_l --codesegcode_l --constsegcode_l
 	@echo "-> Generated $@"
 
-$(OUTPUT_DIR)/crtio.o: crtio.c | $(OUTPUT_DIR)
+$(OUTPUT_DIR)/crtio.o: crtio.c crtio_s.asm | $(OUTPUT_DIR)
 	@echo "Compiling $<"
 	$(ZCC) $(TARGET) $(CFLAGS) $< -o $@ --datasegcode_l --codesegcode_l --constsegcode_l
 	@echo "-> Generated $@"

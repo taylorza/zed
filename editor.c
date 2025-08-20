@@ -235,18 +235,18 @@ void editor_backspace(void) MYCC {
     }
 }
 
-int32_t g_marklen;
 void editor_update_mark(void) MYCC {
+    static int32_t marklen;
     if (e_mark_start == -1) return;
-    g_marklen = abs(e_gap_start - e_mark_start);
+    marklen = abs(e_gap_start - e_mark_start);
 
-    while (g_marklen > SCRATCH_BUFFER_SIZE && e_mark_start > e_gap_start) {
+    while (marklen > SCRATCH_BUFFER_SIZE && e_mark_start > e_gap_start) {
         --e_mark_start;
-        --g_marklen;
+        --marklen;
     }
-    while (g_marklen > SCRATCH_BUFFER_SIZE && e_mark_start < e_gap_start) {
+    while (marklen > SCRATCH_BUFFER_SIZE && e_mark_start < e_gap_start) {
         ++e_mark_start;
-        --g_marklen;
+        --marklen;
     }
 }
 
@@ -714,8 +714,8 @@ int32_t editor_save_file(uint8_t temp) MYCC {
 
     editor_message("Saving...");
 
-#define SAVE_BUF_SIZE 64
-    char buf[SAVE_BUF_SIZE];
+#define SAVE_BUF_SIZE 256
+    static char buf[SAVE_BUF_SIZE];
 
 #ifdef __ZXNEXT
     errno = 0;
@@ -724,14 +724,18 @@ int32_t editor_save_file(uint8_t temp) MYCC {
         strcat(tmpbuffer, ".bak");
     else
         strcat(tmpbuffer, ".zed");
-    char f = esxdos_f_open(tmpbuffer, ESXDOS_MODE_W | ESXDOS_MODE_CT);
+    static char f;
+    f = esxdos_f_open(tmpbuffer, ESXDOS_MODE_W | ESXDOS_MODE_CT);
     if (errno) return errno;
     
-    int32_t i = 0;
+    static int32_t i;
+    static uint8_t j;
+    static char ch;
+    i = 0;
     while (i < e_length) {
-        int j = 0;        
+        j = 0;        
         while (j < (SAVE_BUF_SIZE>>1) && i < e_length) {
-            char ch = editor_get_char(i++);
+            ch = editor_get_char(i++);
             buf[j++] = ch;
             if (ch == '\r') {
                 buf[j++] = '\n';            
@@ -783,16 +787,20 @@ int32_t editor_save_file(uint8_t temp) MYCC {
 }
 
 void editor_init_file(void) MYCC {
-#ifdef __ZXNEXT
+    static int32_t i, bytes_read, total_bytes_read;
+    static char *pwork;
+    static char ch;
+
     errno = 0;
     editor_message("Loading...");
+#ifdef __ZXNEXT
     char f = esxdos_f_open(filename, ESXDOS_MODE_R | ESXDOS_MODE_OE);
     if (!errno) {
-        int32_t total_bytes_read = 0;
+        total_bytes_read = 0;
 
         while (total_bytes_read < text_buffer_size) {
-            char* pwork = get_text_ptr(total_bytes_read);
-            size_t bytes_read = esxdos_f_read(f, pwork, 8192);
+            pwork = get_text_ptr(total_bytes_read);
+            bytes_read = esxdos_f_read(f, pwork, 8192);
             if (bytes_read <= 0) break;
             total_bytes_read += bytes_read;
             editor_busy();
@@ -809,8 +817,8 @@ void editor_init_file(void) MYCC {
         LINE_ENDING_STYLE line_ending_style = LINE_ENDING_NONE;
         if (total_bytes_read > 0) {
             // Check the line ending style
-            for (int32_t i = 0; i < total_bytes_read; ++i) {
-                char ch = get_text_char(i);
+            for (i = 0; i < total_bytes_read; ++i) {
+                ch = get_text_char(i);
                 if (ch == '\r') {
                     line_ending_style = LINE_ENDING_CR;
                     if (i + 1 < total_bytes_read && get_text_char(i + 1) == '\n') {
@@ -824,14 +832,15 @@ void editor_init_file(void) MYCC {
                 }
             }
         
-            int32_t src = total_bytes_read - 1;
-            int32_t dst = text_buffer_size - 1;
-            int32_t bytescopied = 0;
+            static int32_t src, dst, bytescopied;
+            src = total_bytes_read - 1;
+            dst = text_buffer_size - 1;
+            bytescopied = 0;
             while (src >= 0) {
-                char ch = get_text_char(src);
+                ch = get_text_char(src);
                 
                 if (ch == '\t') {
-                    if (dst - 2 < 0) {
+                    if (dst < 1) {
                         e_file_too_large = 1;
                         break;
                     }
@@ -863,7 +872,6 @@ void editor_init_file(void) MYCC {
         exit(errno);
     }
 #else
-    errno = 0;
     FILE* f = fopen(filename, "rb");
     if (!errno) {
         int32_t total_bytes_read = 0;
@@ -938,6 +946,7 @@ void editor_init_file(void) MYCC {
         exit(errno);
     }
 #endif
+    editor_message(NULL);
 }
 
 CommandAction editor_save(void) MYCC {
@@ -1046,15 +1055,18 @@ CommandAction editor_cutline(void) MYCC {
     return COMMAND_ACTION_NONE;
 }
 
-int32_t editor_search(const char* str, int32_t start) MYCC {
+int32_t editor_search(const char* str, int32_t startidx) MYCC {
     static int32_t len;
+    static int32_t i, j, start;
+
     len = strlen(str);
     
+    start = startidx;
     if (start < 0 || start >= e_length) {
         start = 0;
     }
-    for (int32_t i = start; i < e_length - len; ++i) {
-        for (int32_t j = 0; j < len; ++j) {
+    for (i = start; i < e_length - len; ++i) {
+        for (j = 0; j < len; ++j) {
             if (editor_get_char(i + j) != str[j]) {
                 break;
             }
@@ -1162,6 +1174,9 @@ void edit(const char* filepath, int32_t line, int32_t col) MYCC {
 
     filename[0] = '\0';
 
+    cls();
+    editor_show_hotkeys();
+
     if (filepath) {
 #ifdef __ZXNEXT
         cat.filter = ESX_CAT_FILTER_SYSTEM | ESX_CAT_FILTER_LFN;
@@ -1181,12 +1196,11 @@ void edit(const char* filepath, int32_t line, int32_t col) MYCC {
         editor_init_file();
     }
 
-    char ch = 0;
-    cls();
-    editor_show_hotkeys();
     editor_update_filename();
     editor_gotoline(line, col);
     e_redraw_mode = REDRAW_ALL;
+
+    char ch = 0;
     while (1) {
         editor_redraw();
         editor_update_status(ch);

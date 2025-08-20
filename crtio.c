@@ -108,7 +108,7 @@ void screen_init(void) MYCC {
     ZXN_NEXTREG(0x40, 0);             
     ZXN_NEXTREG(0x41, 0b11001111);      // 0-Magenta
     ZXN_NEXTREG(0x40, 16);
-    ZXN_NEXTREG(0x41, 0b11111111);      // 16-Black
+    ZXN_NEXTREG(0x41, 0b11111111);      // 16-White
 
     // Tilemap palette
     ZXN_NEXTREG(0x43, 0b00110000);      // Tilemap palette 1 auto increment
