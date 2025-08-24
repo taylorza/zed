@@ -4,8 +4,14 @@ PUBLIC _get_text_ptr
 PUBLIC _get_text_char
 PUBLIC _set_text_char
 
+;-------------------------------------------------------------------------------
+; char* get_text_ptr(int32_t idx) __sdcccall(1)
+; INPUT
+;  HLDE - idx
+; OUTPUT
+;  DE   - pointer to character in active page
 _get_text_ptr:
-    ; --- form logical page index in C: C = (L << 3) + (D >> 5) ---
+    ;  form logical page index in C: C = (L << 3) | (D >> 5) ---
     ld a, l
     rlca
     rlca
@@ -20,13 +26,11 @@ _get_text_ptr:
     rrca
     rrca
     rrca            ; A = D >> 5 in bits 2..0, high bits now zero
-    add a, c
-    ld c, a         ; C = (L<<3) + (D>>5)
-
+    or c            ; A = (L<<3) | (D>>5)
+    
     ; --- lookup actual page from _pages[C] and map it at 0xC000 ---
     ld hl, _pages
-    ld b, 0
-    add hl, bc
+    add hl, a
     ld a, (hl)
     nextreg 0x56, a     ; MMU slot 6 -> 0xC000
 
