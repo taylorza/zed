@@ -256,14 +256,16 @@ void editor_update_mark(void) MYCC {
  */
 void editor_move_left(void) MYCC {
     static int32_t i;
+    static char ch;
 
     if (e_gap_start > 0) {
         --e_gap_start;
         --e_gap_end;
-        set_text_char(e_gap_end, get_text_char(e_gap_start));
+        ch = get_text_char(e_gap_start);
+        set_text_char(e_gap_end, ch);
 
         e_redraw_mode = REDRAW_CURSOR;
-        if (get_text_char(e_gap_start) != NL) {
+        if (ch != NL) {
             e_cursor_col--;
         }
         else {
@@ -273,7 +275,8 @@ void editor_move_left(void) MYCC {
                 i--;
                 e_cursor_col++;                
             }
-            e_cursor_row--;        
+            e_cursor_row--;
+            editor_busy();
         }
 
         editor_update_mark();
@@ -285,16 +288,20 @@ void editor_move_left(void) MYCC {
  * (That is, move one character from after the gap int32_to the gap.)
  */
 void editor_move_right(void) MYCC {
+    static char ch;
+
     if (e_gap_end < text_buffer_size) {
-        set_text_char(e_gap_start, get_text_char(e_gap_end));
+        ch = get_text_char(e_gap_end);
+        set_text_char(e_gap_start, ch);
         
         e_redraw_mode = REDRAW_CURSOR;
-        if (get_text_char(e_gap_start) != NL) {
+        if (ch != NL) {
             e_cursor_col++;
         }
         else {
             e_cursor_col = 0;
-            e_cursor_row++;            
+            e_cursor_row++;
+            editor_busy();
         }
         ++e_gap_start;
         ++e_gap_end;        
@@ -1120,7 +1127,7 @@ void editor_gotoline(int32_t line, int32_t col) MYCC {
         ++c;
         ++i;
     }
-    if (i < e_length) editor_move_cursor_to(i);    
+    editor_move_cursor_to(i);    
 }
 
 CommandAction editor_goto(void) MYCC {
