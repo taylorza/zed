@@ -1122,9 +1122,18 @@ void editor_gotoline(int32_t line, int32_t col) MYCC {
     for (j = 1; j < g_line && i < e_length; ++j) {
         while (i < e_length && editor_get_char(i) != NL)
             ++i;
-        ++i;
-        editor_busy();
+        /* Only advance past the newline if we're not at EOF */
+        if (i < e_length) {
+            ++i;
+            editor_busy();
+        } else {
+            /* Reached EOF before the requested line; stop here */
+            break;
+        }
     }
+
+    /* Clamp i to e_length to avoid passing an out-of-range index */
+    if (i > e_length) i = e_length;
 
     c = 1;
     while (c < g_col && i < e_length && editor_get_char(i) != NL) {
@@ -1139,6 +1148,7 @@ CommandAction editor_goto(void) MYCC {
     set_cursor_pos(0, LINES);
     if (edit_line("Line number", "1234567890", input, sizeof(input))) {
         int32_t lineno = to_int32(input, NULL);
+        if (lineno < 1) lineno = 1;
         editor_gotoline(lineno, 0);
     }
     return COMMAND_ACTION_NONE;
