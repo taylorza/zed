@@ -95,7 +95,7 @@ Command commands[] = {
     {NULL, NULL, 0, NULL}
 };
 
-const char* get_filename(const char* path) MYCC {
+char* get_filename(char* path) MYCC {
     char* s = &path[0];
     char* p = s + strlen(path);
     while (p > s && *(p - 1) != '/' && *(p - 1) != '\\') --p;
@@ -106,7 +106,7 @@ uint8_t is_whitespace(char c) MYCC {
     return c == ' ' || c == NL;
 }
 
-int32_t to_int32(const char* s, char** p) MYCC {
+int32_t to_int32(const char* s, const char** p) MYCC {
     int32_t v = 0;
     while (isdigit(*s)) {
         v = (v * 10) + (*s - '0');
@@ -573,7 +573,11 @@ void editor_update_filename(void) MYCC {
     if (e_filename && strlen(e_filename) > 31) {
         offs = strlen(e_filename) - 31;
     }
-    print("%s%s%c", offs ? "..." : "", e_filename ? e_filename + offs : "Untitled", e_dirty ? '*' : ' ');
+    const char* prefix = offs ? "..." : "";
+    const char* name = e_filename ? e_filename + offs : "Untitled";
+    print("%s", prefix);
+    print("%s", name);
+    if (e_dirty) putch('*'); else putch(' ');
     standard();
     clreol();
 }
@@ -661,7 +665,7 @@ uint8_t edit_line(const char* prompt, const char* alphabet, char* buffer, uint8_
     get_cursor_pos(&ex, &ey);
 
     size_t len = strlen(buffer);
-    uint8_t i = len;
+    size_t i = len;
     uint8_t redraw = 1;
     uint8_t retval = 255;
 
@@ -1162,7 +1166,7 @@ CommandAction editor_quit(void) MYCC {
     return COMMAND_ACTION_NONE;
 }
 
-void edit(const char* filepath, int32_t line, int32_t col) MYCC {
+void edit(char* filepath, int32_t line, int32_t col) MYCC {
     /* Initial the editor; the entire space is initially the gap. */
     e_filename = NULL;
     e_length = 0;

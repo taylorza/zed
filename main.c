@@ -27,13 +27,13 @@ int main(int argc, char *argv[]) {
     init();
     screen_init();
 
-    const char *filename = NULL;
+    char *filename = NULL;
     int32_t line = 0;
     int32_t col = 0;
 
     for (int i=1; i<argc; ++i) {
         if (*argv[i] == '+') {
-            char *p = argv[i];
+            const char *p = argv[i];
             ++p; // skip '+'
             line = to_int32(p, &p);
             if (*p == ',') {
