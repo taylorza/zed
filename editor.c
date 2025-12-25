@@ -480,7 +480,7 @@ void update_hardware_cursor(int32_t cursor_col, int32_t cursor_row) MYCC
 
 void editor_draw_line(void) MYCC {
     static int32_t i;
-    static uint8_t col;
+    static uint16_t col;
 
     i = e_gap_start;
     while (i > 0 && get_text_char(i - 1) != NL)
@@ -505,7 +505,7 @@ void editor_draw_line(void) MYCC {
 void editor_draw(void) MYCC {
     static int32_t i;
     static uint8_t row;
-    static uint8_t col;
+    static uint16_t col;
     static char c;
     static int32_t mark_from;
     static int32_t mark_to;
