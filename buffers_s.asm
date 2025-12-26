@@ -28,16 +28,16 @@ _get_text_ptr:
     rrca            ; A = D >> 5 in bits 2..0, high bits now zero
     or c            ; A = (L<<3) | (D>>5)
     
-    ; --- lookup actual page from _pages[C] and map it at 0xC000 ---
+    ; --- lookup actual page from _pages[C] and map it at 0xE000 ---
     ld hl, _pages
     add hl, a
     ld a, (hl)
-    nextreg 0x56, a     ; MMU slot 6 -> 0xC000
+    nextreg 0x57, a     ; MMU slot 7 -> 0xE000
 
     ; --- build DE pointer inside the 8K window ---
     ld a, d
     and 0x1F
-    or 0xC0
+    or 0xE0
     ld d, a
     ret
 

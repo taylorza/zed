@@ -1,6 +1,6 @@
 // place stack
 
-//#pragma output REGISTER_SP = xxxx
+#pragma output REGISTER_SP = 0xdff0
 
 // limit size of stdio
 #pragma printf = %s %c %d %ld

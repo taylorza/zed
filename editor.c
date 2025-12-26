@@ -68,8 +68,8 @@ uint8_t e_file_too_large;     // indicates that the file is too large (disable s
 RedrawMode e_redraw_mode;     // what to redraw 
 
 uint32_t visibile_row_index[LINES]; // starting index of each visible row
-int16_t prev_mark_start;
-int16_t prev_mark_end;
+int32_t prev_mark_start;
+int32_t prev_mark_end;
 
 typedef struct {
     const char* short_cut_key;
@@ -487,7 +487,7 @@ void update_hardware_cursor(int32_t cursor_col, int32_t cursor_row) MYCC
 
 void editor_draw_line(void) MYCC {
     static int32_t i;
-    static uint16_t col;
+    static uint32_t col;
 
     i = e_gap_start;
     while (i > 0 && get_text_char(i - 1) != NL)
@@ -512,7 +512,7 @@ void editor_draw_line(void) MYCC {
 void editor_draw(void) MYCC {
     static int32_t i;
     static uint8_t row;
-    static uint16_t col;
+    static uint32_t col;
     static char c;
     static int32_t mark_from;
     static int32_t mark_to;
@@ -697,8 +697,8 @@ void editor_redraw(void) MYCC {
 
     if (e_mark_start != -1) {
         // Normalize new selection to [new_start, new_end)
-        int new_start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
-        int new_end   = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
+        int32_t new_start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
+        int32_t new_end   = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
 
         if (prev_mark_start == -1) {
             // No previous selection: just mark the new one
@@ -707,17 +707,15 @@ void editor_redraw(void) MYCC {
             }
         } else {
             // Normalize previous selection to [old_start, old_end)
-            int old_start = prev_mark_start < prev_mark_end ? prev_mark_start : prev_mark_end;
-            int old_end   = prev_mark_start > prev_mark_end ? prev_mark_start : prev_mark_end;
+            int32_t old_start = prev_mark_start < prev_mark_end ? prev_mark_start : prev_mark_end;
+            int32_t old_end   = prev_mark_start > prev_mark_end ? prev_mark_start : prev_mark_end;
 
             // Check if we changed direction
             if ((prev_mark_start < prev_mark_end && e_mark_start > e_gap_start) ||
                 (prev_mark_start > prev_mark_end && e_mark_start < e_gap_start)) {
-                e_redraw_mode = REDRAW_ALL;
-                editor_message("Redraw all due to direction change");
+                e_redraw_mode = REDRAW_ALL;                
             }
             else {
-                editor_message("Update selection");
                 // --- LEFT SIDE DIFF ---
                 // If the left boundary moved right: unmark what was lost on the left
                 if (old_start < new_start) {
@@ -1237,36 +1235,127 @@ CommandAction editor_find(void) MYCC {
     e_redraw_mode = REDRAW_CURSOR;
     return COMMAND_ACTION_NONE;
 }
+static int32_t editor_line_start_index(int32_t line) MYCC {
+    /* line is 1-based */
+    if (line <= 1) return 0;
 
-void editor_gotoline(int32_t line, int32_t col) MYCC {
-    static int32_t g_line, g_col, i, j, c; 
-    g_line = line;
-    g_col = col;
+    int32_t target_line = line - 1; /* zero-based */
+    int32_t max_visible_lines = LINES - 1;
 
-    i = 0;
-    for (j = 1; j < g_line && i < e_length; ++j) {
-        while (i < e_length && editor_get_char(i) != NL)
-            ++i;
-        /* Only advance past the newline if we're not at EOF */
-        if (i < e_length) {
+    /* If target is inside the visible window, return it directly */
+    if (visibile_row_index[0] != INVALID_LINE &&
+        target_line >= e_row_offset &&
+        target_line < e_row_offset + max_visible_lines) {
+        int32_t row = target_line - e_row_offset;
+        return visibile_row_index[row];
+    }
+
+    /* Choose best anchor: file start (line 0), current cursor row, or top row */
+    int32_t anchor_line = 0;
+    int32_t anchor_index = 0;
+
+    /* Current cursor row anchor */
+    if (e_cursor_row >= 0) {
+        int32_t dist_cursor = abs(e_cursor_row - target_line);
+        int32_t dist_top = abs(e_row_offset - target_line);
+        if (dist_cursor <= dist_top && (dist_cursor <= target_line)) {
+            /* compute current line start from gap */
+            anchor_line = e_cursor_row;
+            anchor_index = editor_find_line_start(e_gap_start - 1);
+        } else {
+            anchor_line = e_row_offset;
+            anchor_index = e_top_row_index;
+        }
+    } else {
+        anchor_line = e_row_offset;
+        anchor_index = e_top_row_index;
+    }
+
+    /* If top-of-window is invalid (not filled), fallback to file start */
+    if (anchor_index == INVALID_LINE || anchor_index < 0) {
+        anchor_line = 0;
+        anchor_index = 0;
+    }
+
+    /* Move forward or backward from the anchor to the target line */
+    if (anchor_line <= target_line) {
+        int32_t i = anchor_line;
+        int32_t idx = anchor_index;
+        while (i < target_line && idx < e_length) {
+            int32_t end = editor_find_line_end(idx);
+            if (end >= e_length) {
+                /* reached EOF */
+                idx = e_length;
+                break;
+            }
+            idx = end + 1;
             ++i;
             editor_busy();
-        } else {
-            /* Reached EOF before the requested line; stop here */
-            break;
         }
+        return idx;
+    } else {
+        int32_t i = anchor_line;
+        int32_t idx = anchor_index;
+        while (i > target_line && idx > 0) {
+           /* idx is a line-start; idx-1 is the newline, so search from idx-2
+            * (inside the previous line) to get the prior line's start. */
+            if (idx >= 2) {
+                idx = editor_find_line_start(idx - 2);
+            } else {
+                idx = 0;
+            }
+            --i;
+            editor_busy();
+        }
+        return idx;
     }
+}
+
+void editor_gotoline(int32_t line, int32_t col) MYCC {
+    int32_t i = editor_line_start_index(line);
 
     /* Clamp i to e_length to avoid passing an out-of-range index */
     if (i > e_length) i = e_length;
 
-    c = 1;
-    while (c < g_col && i < e_length && editor_get_char(i) != NL) {
+    int32_t c = 1;
+    while (c < col && i < e_length && editor_get_char(i) != NL) {
         ++c;
         ++i;
+        editor_busy();
     }
-    editor_move_cursor_to(i);    
+    editor_move_cursor_to(i);
 }
+
+//void editor_gotoline(int32_t line, int32_t col) MYCC {
+//    static int32_t g_line, g_col, i, j, c; 
+//    g_line = line;
+//    g_col = col;
+//
+//    i = 0;
+//    for (j = 1; j < g_line && i < e_length; ++j) {
+//        while (i < e_length && editor_get_char(i) != NL)
+//            ++i;
+//        /* Only advance past the newline if we're not at EOF */
+//        if (i < e_length) {
+//            ++i;
+//            editor_busy();
+//        } else {
+//            /* Reached EOF before the requested line; stop here */
+//            break;
+//        }
+//    }
+//
+//    /* Clamp i to e_length to avoid passing an out-of-range index */
+//    if (i > e_length) i = e_length;
+//
+//    c = 1;
+//    while (c < g_col && i < e_length && editor_get_char(i) != NL) {
+//        ++c;
+//        ++i;
+//    }
+//    editor_move_cursor_to(i);    
+//}
+
 
 CommandAction editor_goto(void) MYCC {
     char input[8] = { 0 };
