@@ -344,6 +344,12 @@ void standard(void) MYCC {
     attr = 0b00000000;
 }
 
+void set_attr_at(uint8_t x, uint8_t y, uint8_t a) MYCC {
+    if (x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT) return;
+    char * p = screen+(((y*SCREEN_WIDTH) + x) << 1) + 1;
+    *p = a;
+}
+
 uint16_t get_ticks(void) MYCC {
     return ticks;
 }

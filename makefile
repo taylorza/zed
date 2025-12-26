@@ -22,14 +22,14 @@ all: compile link
 $(OUTPUT_DIR):
 	mkdir $(OUTPUT_DIR)
 
-$(OUTPUT_DIR)/buffers.o: buffers.c buffers_s.asm | $(OUTPUT_DIR)
-	@echo "Compiling $<"
-	$(ZCC) $(TARGET) $(CFLAGS) $< -o $@ --datasegcode_l --codesegcode_l --constsegcode_l
-	@echo "-> Generated $@"
+#$(OUTPUT_DIR)/buffers.o: buffers.c buffers_s.asm | $(OUTPUT_DIR)
+#	@echo "Compiling $<"
+#	$(ZCC) $(TARGET) $(CFLAGS) $< -o $@ --datasegcode_l --codesegcode_l --constsegcode_l
+#	@echo "-> Generated $@"
 
 $(OUTPUT_DIR)/crtio.o: crtio.c crtio_s.asm | $(OUTPUT_DIR)
 	@echo "Compiling $<"
-	$(ZCC) $(TARGET) $(CFLAGS) $< -o $@ --datasegcode_l --codesegcode_l --constsegcode_l
+	$(ZCC) $(TARGET) $(CFLAGS) $< -o $@ --datasegcode_l --codesegcode_l --constsegcode_l --bsssegcode_l
 	@echo "-> Generated $@"
 
 $(OUTPUT_DIR)/%.o: %.c | $(OUTPUT_DIR)

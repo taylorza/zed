@@ -54,6 +54,7 @@ void get_cursor_pos(uint8_t *x, uint8_t *y) MYCC;
 
 void highlight(void) MYCC;
 void standard(void) MYCC;
+void set_attr_at(uint8_t x, uint8_t y, uint8_t a) MYCC;
 
 uint16_t get_ticks(void) MYCC;
 

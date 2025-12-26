@@ -56,7 +56,7 @@ int32_t e_gap_start;          // the index of the beginning of the gap (cursor p
 int32_t e_gap_end;            // one past the end of the gap
 int32_t e_row_offset;         // vertical scrolling offset (first displayed line)
 int32_t e_col_offset;         // horizontal scrolling offset (first displayed column)
-int32_t e_top_row_index;      // top row of the window (in the displayed text)      
+int32_t e_top_row_index;      // top row of the window (in the displayed text)
 int32_t e_cursor_row;         // current cursor row (in the gap buffer)
 int32_t e_cursor_col;         // current cursor column (in the gap buffer)
 int32_t e_mark_start;         // start of marked text (-1 if none)
@@ -64,6 +64,9 @@ uint16_t e_last_save_tick;    // ticks at the time of the last save
 uint8_t e_dirty;              // dirty flag
 uint8_t e_file_too_large;     // indicates that the file is too large (disable save)
 RedrawMode e_redraw_mode;     // what to redraw 
+
+int16_t prev_mark_start;
+int16_t prev_mark_end;
 
 typedef struct {
     const char* short_cut_key;
@@ -238,6 +241,7 @@ void editor_backspace(void) MYCC {
 void editor_update_mark(void) MYCC {
     static int32_t marklen;
     if (e_mark_start == -1) return;
+
     marklen = abs(e_gap_start - e_mark_start);
 
     while (marklen > SCRATCH_BUFFER_SIZE && e_mark_start > e_gap_start) {
@@ -618,18 +622,103 @@ void editor_update_status(char key) MYCC {
     set_cursor_pos(ox, oy);
 }
 
+void set_attr_region(int32_t from, int32_t to, uint8_t a) {
+    static int32_t s, e;
+    static int32_t row, col;
+    static int32_t pos;
+    
+    s = from;
+    e = to;
+    if (s > e) {
+        int32_t temp = s;
+        s = e;
+        e = temp;
+    }
+    
+    if (s < e_top_row_index) s = e_top_row_index;
+    if (e > e_length) e = e_length;
+
+    row = 0;
+    col = -e_col_offset;
+    pos = e_top_row_index;
+    while (pos < s) {
+        char c = editor_get_char(pos);
+        if (c == NL) {
+            row++;
+            col = -e_col_offset;
+        } else {
+            col++;
+        }
+        pos++;
+    }
+    while (pos < e && row < LINES - 1) {
+        char c = editor_get_char(pos);        
+        set_attr_at(col, row, a);
+        if (c == NL) {
+            row++;
+            col = -e_col_offset;
+        } else {
+            col++;
+        }        
+        pos++;
+    }
+}
+
 void editor_redraw(void) MYCC {
     editor_update_scroll();
 
-    if (e_mark_start != -1) {
-        e_redraw_mode = REDRAW_ALL;
-    }
+    //if (e_mark_start != -1) {
+    //    e_redraw_mode = REDRAW_ALL;
+    //}
 
     if (e_redraw_mode == REDRAW_ALL) {
-        editor_draw();
+        editor_draw();    
     }
     else if (e_redraw_mode == REDRAW_LINE) {
         editor_draw_line();
+    }
+
+    if (e_mark_start != -1) {
+
+        // Normalize new selection to [new_start, new_end)
+        int new_start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
+        int new_end   = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
+
+        if (prev_mark_start == -1) {
+            // No previous selection: just mark the new one
+            if (new_start != new_end) {
+                set_attr_region(new_start, new_end, 0b00010000);
+            }
+        } else {
+            // Normalize previous selection to [old_start, old_end)
+            int old_start = prev_mark_start < prev_mark_end ? prev_mark_start : prev_mark_end;
+            int old_end   = prev_mark_start > prev_mark_end ? prev_mark_start : prev_mark_end;
+
+            // --- LEFT SIDE DIFF ---
+            // If the left boundary moved right: unmark what was lost on the left
+            if (old_start < new_start) {
+                set_attr_region(old_start, new_start, 0b00000000);
+            }
+            // If the left boundary moved left: mark what was gained on the left
+            else if (new_start < old_start) {
+                set_attr_region(new_start, old_start, 0b00010000);
+            }
+
+            // --- RIGHT SIDE DIFF ---
+            // If the right boundary moved left: unmark what was lost on the right
+            if (old_end > new_end) {
+                set_attr_region(new_end, old_end, 0b00000000);
+            }
+            // If the right boundary moved right: mark what was gained on the right
+            else if (new_end > old_end) {
+                set_attr_region(old_end, new_end, 0b00010000);
+            }
+        }
+
+        // Store raw endpoints (anchor/cursor) or normalized—your choice.
+        // If other code assumes raw, keep this as-is:
+        prev_mark_start = e_mark_start;
+        prev_mark_end   = e_gap_start;
     }
 
     int32_t cursor_row, cursor_col;
@@ -1004,6 +1093,7 @@ CommandAction editor_mark(void) MYCC {
         e_mark_start = e_gap_start;
     else {
         e_mark_start = -1;
+        prev_mark_start = prev_mark_end = -1;
         e_redraw_mode = REDRAW_ALL;
     }
     return COMMAND_ACTION_NONE;
@@ -1028,6 +1118,7 @@ void editor_cutcopy(uint8_t cut, int32_t start, int32_t end) MYCC {
     }
 
     e_mark_start = -1;
+    prev_mark_start = prev_mark_end = -1;
     e_redraw_mode = REDRAW_ALL;
 }
 
@@ -1054,6 +1145,7 @@ CommandAction editor_paste(void) MYCC {
         editor_insert(*src++);
     }
     e_mark_start = -1;
+    prev_mark_start = prev_mark_end = -1;
     e_redraw_mode = REDRAW_ALL;
     return COMMAND_ACTION_NONE;
 }
@@ -1109,6 +1201,7 @@ CommandAction editor_find(void) MYCC {
     }
     editor_move_cursor_to(e_mark_start);
     e_mark_start = -1;
+    prev_mark_start = prev_mark_end = -1;
     e_redraw_mode = REDRAW_CURSOR;
     return COMMAND_ACTION_NONE;
 }
@@ -1192,6 +1285,8 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
     e_mark_start = -1;
     e_file_too_large = 0;
     e_redraw_mode = REDRAW_ALL;
+
+    prev_mark_start = prev_mark_end = -1;
 
     filename[0] = '\0';
 
