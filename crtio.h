@@ -6,15 +6,23 @@
 #define SCREEN_WIDTH    80
 #define SCREEN_HEIGHT   32
 
-#define KEY_TAB         0x04
+#define DEFAULT_ATTR   0b00000000
+#define SELECT_ATTR    0b00010000
+#define HIGHLIGHT_ATTR 0b00100000
+
 #define KEY_ESC         0x01
 #define KEY_CAPSLOCK    0x02
+#define KEY_TAB         0x03
+#define KEY_INVERSE     0x04
 #define KEY_LEFT        0x05
 #define KEY_DOWN        0x06
 #define KEY_UP          0x07
 #define KEY_RIGHT       0x08
+#define KEY_GRAPH       0x09
 #define KEY_BACKSPACE   0x0a
 #define KEY_ENTER       0x0d
+
+#define KEY_INSERT      177 // Extended + Edit
 
 #define KEY_WORDLEFT    181
 #define KEY_PAGEDOWN    182
@@ -52,9 +60,10 @@ char getch(void) MYCC;
 void set_cursor_pos(uint8_t x, uint8_t y) MYCC;
 void get_cursor_pos(uint8_t *x, uint8_t *y) MYCC;
 
-void highlight(void) MYCC;
-void standard(void) MYCC;
+void set_attr(uint8_t a) MYCC;
 void set_attr_at(uint8_t x, uint8_t y, uint8_t a) MYCC;
+
+uint8_t is_insert_mode(void) MYCC;
 
 uint16_t get_ticks(void) MYCC;
 

@@ -19,6 +19,17 @@
 #define OFFSET_MAP      ((START_MAP - START_BANKS) >> 8)
 #define OFFSET_TILES    ((START_TILE_DEF - START_BANKS) >> 8)
 
+typedef enum KeyMode {
+    KEYMODE_NORMAL,
+    KEYMODE_GRAPHICS,
+    KEYMODE_INVGRAPHICS,
+} KeyMode;
+
+typedef enum EditMode {
+    EDITMODE_INSERT,
+    EDITMODE_OVERWRITE,
+} EditMode;
+
 extern uint8_t kbstate[];
 const uint8_t unshifted [] = {
     'a','s','d','f','g',
@@ -87,11 +98,70 @@ uint8_t caret_state[] = {
     0b10000000,     // 0x39 - 4-bit sprite, Y9
 };
 
+uint8_t spr_carets[] = {
+    0b10000000,
+    0b10000000,
+    0b10000000,
+    0b10000000,
+    0b10000000,
+    0b10000000,
+    0b10000000,
+    0b10000000,
+
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b11110000,
+    0b11110000,
+    0b11110000,
+};
+
+
+KeyMode current_key_mode = KEYMODE_NORMAL;
+EditMode current_edit_mode = EDITMODE_INSERT;
+
 extern void kbd_scan(void) MYCC;
 
-extern void setup_caret_sprite(void) MYCC;
 void position_caret(void) MYCC;
 void update_caret(void) MYCC;
+
+#define BACKGROUND_COLOR 0b00000010     // Blue
+#define FOREGROUND_COLOR 0b11111100     // Yellow
+#define HIGHLIGHT_COLOR  0b00001011     // Light Blue
+
+// src: 8-bit input
+// dst: array of 4 bytes
+// 1 → 0000, 0 → 0011
+void expand_bits_to_nibbles(uint8_t src, uint8_t dst[8]) {
+    static const uint8_t map[2] = { 0x03, 0x00 }; 
+    dst[0] = (map[(src >> 7) & 1] << 4) | map[(src >> 6) & 1];
+    dst[1] = (map[(src >> 5) & 1] << 4) | map[(src >> 4) & 1];
+    dst[2] = (map[(src >> 3) & 1] << 4) | map[(src >> 2) & 1];
+    dst[3] = (map[(src >> 1) & 1] << 4) | map[(src >> 0) & 1];
+}
+
+
+void setup_caret_sprites(void) MYCC {
+    uint8_t pixels[128];
+
+    uint8_t reg9 = ZXN_READ_REG(0x09);
+    ZXN_NEXTREGA(0x09, reg9 & 0b11101111); // Disable sprite lockstep
+
+#ifdef __SDCC
+    IO_SPRITE_SLOT = 0;
+#endif  
+    for(uint8_t i = 0; i < sizeof(spr_carets); i+=8) {
+
+        memset(pixels, 0x33, sizeof(pixels));
+        for(uint8_t j = 0; j < 8; ++j) {        
+            expand_bits_to_nibbles(spr_carets[i+j], pixels + (j * 8));
+        }
+        intrinsic_outi((void*)pixels, __IO_SPRITE_PATTERN, 128);  
+    }
+    ZXN_NEXTREGA(0x15, 0b01000011);     // Enable sprites, SLU
+}
 
 void screen_init(void) MYCC {
     cx = 0;
@@ -109,16 +179,22 @@ void screen_init(void) MYCC {
     ZXN_NEXTREG(0x41, 0b11001111);      // 0-Magenta
     ZXN_NEXTREG(0x40, 16);
     ZXN_NEXTREG(0x41, 0b11111111);      // 16-White
+    ZXN_NEXTREG(0x40, 32);
+    ZXN_NEXTREG(0x41, 0b00011100);      // 32-Green
 
     // Tilemap palette
     ZXN_NEXTREG(0x43, 0b00110000);      // Tilemap palette 1 auto increment
     ZXN_NEXTREG(0x40, 0);             
-    ZXN_NEXTREG(0x41, 0b00000010);      // 0-Blue
-    ZXN_NEXTREG(0x41, 0b11111100);      // 1-Yellow
+    ZXN_NEXTREG(0x41, BACKGROUND_COLOR);      // 0-Blue
+    ZXN_NEXTREG(0x41, FOREGROUND_COLOR);      // 1-Yellow
     
     ZXN_NEXTREG(0x40, 16);             
-    ZXN_NEXTREG(0x41, 0b11111100);      // 0-Yellow
-    ZXN_NEXTREG(0x41, 0b00000010);      // 1-Blue
+    ZXN_NEXTREG(0x41, FOREGROUND_COLOR);      // 0-Yellow
+    ZXN_NEXTREG(0x41, BACKGROUND_COLOR);      // 1-Blue
+
+    ZXN_NEXTREG(0x40, 32);             
+    ZXN_NEXTREG(0x41, HIGHLIGHT_COLOR);       // 0-Light Blue
+    ZXN_NEXTREG(0x41, FOREGROUND_COLOR);      // 1-Yellow
 
     ZXN_NEXTREG(0x6b, 0b11001001);      // 80x32 text mode with attributes
     ZXN_NEXTREGA(0x6e, OFFSET_MAP);
@@ -145,7 +221,7 @@ void screen_init(void) MYCC {
 
     memcpy((void*)START_TILE_DEF, &font_crtio[0], sizeof(font_crtio));
     
-    setup_caret_sprite();
+    setup_caret_sprites();
     update_caret();
     show_caret();
     cls();
@@ -174,7 +250,7 @@ void putch(char ch) MYCC {
         cx=0;
         return;
     }
-    if (ch < 32 || ch > 128) ch=128;
+    if (ch < 32 || ch > 143) ch=128;
 
     if (cx > SCREEN_WIDTH-1) {
         cx = 0;
@@ -199,7 +275,10 @@ void putch_at(uint8_t x, uint8_t y, char ch) MYCC {
 void clreol(void) MYCC {
     if (cx > SCREEN_WIDTH-1) return;
     char * p = screen+(((cy*SCREEN_WIDTH) + cx) << 1);
-    memset(p, 0, (SCREEN_WIDTH - cx) << 1);    
+    for (uint8_t i=cx; i<SCREEN_WIDTH; ++i) {
+        *p++ = 0;
+        *p++ = attr;
+    }
 }
 
 void gotosol(void) MYCC {
@@ -242,6 +321,22 @@ char kbhandler(void) MYCC {
     return 0;  
 }
 
+char process_key(char key) MYCC {
+    if (capslock){
+        if (key >= 'a' && key <= 'z') key -= 0x20;
+        else if (key >= 'A' && key <= 'Z') key += 0x20;
+    }
+    if (current_key_mode == KEYMODE_GRAPHICS || current_key_mode == KEYMODE_INVGRAPHICS) {
+        if (key >= '0' && key <= '8') {
+            key += 0x80 - '0'; // Set high bit for graphics
+            if (current_key_mode == KEYMODE_INVGRAPHICS) {
+                key ^= 0x0f; // Invert lower nibble for inverse graphics
+            }
+        }                
+    }
+    return key;
+}
+
 char getch(void) MYCC {
     static char lastkey = 0;
     static uint8_t repeating = 0;
@@ -258,29 +353,41 @@ char getch(void) MYCC {
             repeating = 0;
             continue;
         }
+
         if (key != lastkey) {
             lastkey = key;
             repeat_delay = 0;
-            if (key == KEY_CAPSLOCK) {
-                capslock = !capslock;
-                continue;
-            }
-            if (capslock){
-                if (key >= 'a' && key <= 'z') key -= 0x20;
-                else if (key >= 'A' && key <= 'Z') key += 0x20;
-            }
-            return key;
+            switch(key) {
+                case KEY_CAPSLOCK:
+                    capslock = !capslock;
+                    continue;
+                case KEY_INSERT:
+                    if (current_edit_mode == EDITMODE_INSERT)
+                        current_edit_mode = EDITMODE_OVERWRITE;
+                    else
+                        current_edit_mode = EDITMODE_INSERT;
+                    continue;
+                case KEY_GRAPH:
+                    if (current_key_mode == KEYMODE_GRAPHICS)
+                        current_key_mode = KEYMODE_NORMAL;
+                    else
+                        current_key_mode = KEYMODE_GRAPHICS;
+                    continue;  
+                case KEY_INVERSE:
+                    if (current_key_mode == KEYMODE_INVGRAPHICS)
+                        current_key_mode = KEYMODE_NORMAL;
+                    else
+                        current_key_mode = KEYMODE_INVGRAPHICS;
+                    continue;              
+            }                        
         } else {
             ++repeat_delay;
             if (repeat_delay < REPEAT_DELAY) continue;
             if (repeat_delay < REPEAT_DELAY+REPEAT_RATE) continue;
-            repeat_delay = REPEAT_DELAY;
-            if (capslock){
-                if (key >= 'a' && key <= 'z') key -= 0x20;
-                else if (key >= 'A' && key <= 'Z') key += 0x20;
-            }
-            return key;
+            repeat_delay = REPEAT_DELAY;            
         }
+
+        return process_key(key);
     }  
 }
 
@@ -298,12 +405,19 @@ void position_caret(void) MYCC {
 }
 
 void update_caret(void) MYCC {
+    uint8_t pattern = 0;
+    uint8_t palette = 0;
+
+    if (capslock) palette = 1;
+    if (current_key_mode == KEYMODE_GRAPHICS) palette = 2;
+    if (current_edit_mode == EDITMODE_OVERWRITE) pattern = 1;
+
     ZXN_NEXTREG(0x34, 0);
     ZXN_NEXTREGA(0x35, caret_state[0]);
     ZXN_NEXTREGA(0x36, caret_state[1]);
-    ZXN_NEXTREGA(0x37, (capslock<<4) | caret_state[2]);
-    ZXN_NEXTREGA(0x38, caret_state[3]);
-    ZXN_NEXTREGA(0x39, caret_state[4]);
+    ZXN_NEXTREGA(0x37, (palette<<4) | caret_state[2]);
+    ZXN_NEXTREGA(0x38, caret_state[3] | (pattern >> 1));
+    ZXN_NEXTREGA(0x39, caret_state[4] | ((pattern & 1) << 6));
 }
 
 void show_caret(void) MYCC {
@@ -336,12 +450,8 @@ void get_cursor_pos(uint8_t *x, uint8_t *y) MYCC {
     *y = cy;
 }
 
-void highlight(void) MYCC {
-    attr = 0b00010000;
-}
-
-void standard(void) MYCC {
-    attr = 0b00000000;
+void set_attr(uint8_t a) MYCC {
+    attr = a;
 }
 
 void set_attr_at(uint8_t x, uint8_t y, uint8_t a) MYCC {
@@ -354,3 +464,6 @@ uint16_t get_ticks(void) MYCC {
     return ticks;
 }
 
+uint8_t is_insert_mode(void) MYCC {
+    return (current_edit_mode == EDITMODE_INSERT) ? 1 : 0;
+}

@@ -13,7 +13,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.4"
+#define VERSION "0.5"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
@@ -29,7 +29,7 @@
 #define MASK_DIRTY (~FLAG_DIRTY)
 #define MASK_AUTOSAVE (~FLAG_AUTOSAVE)
 
-#define INVALID_LINE 99999999
+#define INVALID_LINE 0xffffffff
 
 struct esx_cat cat;
 struct esx_lfn lfn;
@@ -71,6 +71,8 @@ uint32_t visibile_row_index[LINES]; // starting index of each visible row
 int32_t prev_mark_start;
 int32_t prev_mark_end;
 
+int32_t prev_highlight_row;
+
 typedef struct {
     const char* short_cut_key;
     const char* description;
@@ -101,6 +103,10 @@ Command commands[] = {
     {NULL, NULL, 0, NULL}
 };
 
+// Forward declarations
+void editor_busy(void) MYCC;
+void editor_move_right(void) MYCC;
+
 char* get_filename(char* path) MYCC {
     char* s = &path[0];
     char* p = s + strlen(path);
@@ -123,7 +129,7 @@ int32_t to_int32(const char* s, const char** p) MYCC {
 }
 
 int8_t e_busy = -50;
-void editor_busy(void) {
+void editor_busy(void) MYCC {
     static uint8_t chars[] = {'|','/','-', '\\'};
 
     if (e_busy < 0) {
@@ -140,12 +146,29 @@ void editor_ready(void) {
     e_busy = -50;
 }
 
+void editor_message(const char* msg) MYCC {
+    uint8_t ox, oy;
+    get_cursor_pos(&ox, &oy);
+    set_cursor_pos(0, LINES);
+    if (msg) print("%s", msg);
+    clreol();
+    set_cursor_pos(ox, oy);
+}
+
 /* Returns the i-th character of the text (ignoring the gap). */
 char editor_get_char(int32_t index) MYCC {
     if (index < e_gap_start)
         return get_text_char(index);
     else
         return get_text_char((index - e_gap_start) + e_gap_end);
+}
+
+inline void editor_update_row_index(uint8_t row, int32_t offset) MYCC {
+    for(uint8_t r=row; r<LINES; ++r) {
+        if (visibile_row_index[r] == INVALID_LINE)
+            break;
+        visibile_row_index[r] += offset;        
+    }
 }
 
 /* Returns index of the start of the line in the buffer at position 'at'*/
@@ -181,15 +204,28 @@ void editor_insert(char c) MYCC {
     if (e_gap_start == e_gap_end) {
         return;  // No space to insert.
     }
-    set_text_char(e_gap_start, c);
-    ++e_length;
-    ++e_gap_start;
-    if (c != NL) {
-        e_cursor_col++;
+
+    uint8_t row = (e_cursor_row - e_row_offset);
+    if (visibile_row_index[row] == INVALID_LINE) {
+        visibile_row_index[row] = e_gap_start;
     }
-    else {
-        e_cursor_row++;
-        e_cursor_col = 0;
+    
+    if (!is_insert_mode() && c != NL && e_gap_end < text_buffer_size && get_text_char(e_gap_start) != NL) {        
+        set_text_char(e_gap_end, c);
+        editor_move_right();
+    } else {
+        set_text_char(e_gap_start, c);
+
+        ++e_length;
+        ++e_gap_start;
+        if (c != NL) {
+            e_cursor_col++;
+        }
+        else {
+            e_cursor_row++;
+            e_cursor_col = 0;
+        }
+        editor_update_row_index(row+1, 1);
     }
     e_dirty = FLAG_DIRTY | FLAG_AUTOSAVE;
     e_redraw_mode = REDRAW_LINE;
@@ -219,28 +255,6 @@ void editor_insert_newline(void) MYCC {
     e_redraw_mode = REDRAW_ALL;
 }
 
-/* Delete the character to the left of the cursor (if any). */
-void editor_backspace(void) MYCC {
-    if (e_gap_start > 0) {
-        char c = get_text_char(--e_gap_start);
-        --e_length;
-        e_redraw_mode = (c == NL ? REDRAW_ALL : REDRAW_LINE);
-        if (c != NL) {
-            e_cursor_col--;
-        }
-        else {
-            int32_t i = e_gap_start - 1;
-            e_cursor_col = 0;
-            while (i >= 0 && get_text_char(i) != NL) {
-                i--;
-                e_cursor_col++;
-            }
-            e_cursor_row--;
-        }
-        e_dirty = FLAG_DIRTY | FLAG_AUTOSAVE;
-    }
-}
-
 void editor_update_mark(void) MYCC {
     static int32_t marklen;
     if (e_mark_start == -1) return;
@@ -254,6 +268,38 @@ void editor_update_mark(void) MYCC {
     while (marklen > SCRATCH_BUFFER_SIZE && e_mark_start < e_gap_start) {
         ++e_mark_start;
         --marklen;
+    }
+}
+
+/* Delete the character to the left of the cursor (if any). */
+void editor_backspace(void) MYCC {
+    if (e_gap_start > 0) {
+        char c = get_text_char(--e_gap_start);
+        if (e_mark_start != -1 && e_gap_start <= e_mark_start) {
+            e_mark_start--;
+        }
+        --e_length;
+        
+        e_redraw_mode = (c == NL ? REDRAW_ALL : REDRAW_LINE);
+        if (c != NL) {
+            e_cursor_col--;
+        }
+        else {
+            int32_t i = e_gap_start - 1;
+            e_cursor_col = 0;
+            while (i >= 0 && get_text_char(i) != NL) {
+                i--;
+                e_cursor_col++;
+            }
+            e_cursor_row--;
+        }
+
+        if (e_redraw_mode != REDRAW_ALL) {
+            uint8_t row = (e_cursor_row - e_row_offset);
+            editor_update_row_index(row + 1, -1);
+        }        
+        e_dirty = FLAG_DIRTY | FLAG_AUTOSAVE;
+        editor_update_mark();
     }
 }
 
@@ -488,16 +534,42 @@ void update_hardware_cursor(int32_t cursor_col, int32_t cursor_row) MYCC
 void editor_draw_line(void) MYCC {
     static int32_t i;
     static uint32_t col;
+    static uint8_t row;
+    static int32_t mark_from;
+    static int32_t mark_to;
+    static uint8_t marking;
+    static uint8_t was_marking;
+    static uint8_t should_mark;
 
-    i = e_gap_start;
-    while (i > 0 && get_text_char(i - 1) != NL)
-        i--;
+    marking = 0;
+    was_marking = 0;
+    should_mark = (e_mark_start != -1);
+    if (should_mark){
+        mark_from = e_mark_start <= e_gap_start ? e_mark_start : e_gap_start;
+        mark_to = e_mark_start >= e_gap_start ? e_mark_start : e_gap_start;
+    }
 
     gotosol();
-    for (col = 0; col < COLS + e_col_offset && i < e_length; ++col, ++i) {
+    row = e_cursor_row - e_row_offset;
+    i = visibile_row_index[row];
+
+    set_attr(should_mark? SELECT_ATTR : HIGHLIGHT_ATTR);
+    for (col = 0; col < COLS && i < e_length; ++col, ++i) {
         char c = editor_get_char(i);
+        if (should_mark) {
+            marking = (i >= mark_from && i < mark_to);
+            if (marking != was_marking){
+                was_marking = marking;
+                if (marking) {
+                    set_attr(SELECT_ATTR);
+                } else {
+                    should_mark = 0;
+                    set_attr(DEFAULT_ATTR);
+                }
+            }               
+        } 
         if (c == NL) break;
-        if (col >= e_col_offset) putch(c);
+        putch(c);
     }
     clreol();
 
@@ -512,6 +584,7 @@ void editor_draw_line(void) MYCC {
 void editor_draw(void) MYCC {
     static int32_t i;
     static uint8_t row;
+    static uint8_t edit_row;
     static uint32_t col;
     static char c;
     static int32_t mark_from;
@@ -519,7 +592,7 @@ void editor_draw(void) MYCC {
     static uint8_t marking;
     static uint8_t was_marking;
     static uint8_t should_mark;
-
+    
     i = e_top_row_index;
 
     set_cursor_pos(0, 0);
@@ -527,18 +600,21 @@ void editor_draw(void) MYCC {
     marking = 0;
     was_marking = 0;
     should_mark = (e_mark_start != -1);
-    if (should_mark) editor_update_mark();
 
-    mark_from = e_mark_start <= e_gap_start ? e_mark_start : e_gap_start;
-    mark_to = e_mark_start >= e_gap_start ? e_mark_start : e_gap_start;
+    if (should_mark) {
+        mark_from = e_mark_start <= e_gap_start ? e_mark_start : e_gap_start;
+        mark_to = e_mark_start >= e_gap_start ? e_mark_start : e_gap_start;
+    }
 
-    standard();
+    edit_row = e_cursor_row - e_row_offset;
+    set_attr(DEFAULT_ATTR);
     for (row = 0; row < LINES - 1 && i < e_length; ++row, ++i) {
         for (col = 0; col < e_col_offset && i < e_length; ++col, ++i) {
             c = editor_get_char(i);
             if (c == NL) break;
         }
         visibile_row_index[row] = i;
+         
         for (col = 0; col < COLS && i < e_length; ++col, ++i) {
             c = editor_get_char(i);
             
@@ -547,16 +623,16 @@ void editor_draw(void) MYCC {
                 if (marking != was_marking){
                     was_marking = marking;
                     if (marking) {
-                        highlight();
+                        set_attr(SELECT_ATTR);
                     } else {
                         should_mark = 0;
-                        standard();
+                        set_attr(DEFAULT_ATTR);
                     }
-                }               
+                }
             }
 
             if (c == NL) {
-                if (marking) set_attr_at(col, row, 0b00010000);
+                if (marking) set_attr_at(col, row, SELECT_ATTR);
                 break;
             }
             
@@ -564,14 +640,21 @@ void editor_draw(void) MYCC {
         }
         while (i < e_length && (c = editor_get_char(i)) != NL) ++i;
         if (c == NL) {
-            clreol();
-            putch(NL);
+            set_attr(DEFAULT_ATTR);
+            clreol();            
+            putch(NL);            
+            if (marking) {
+                set_attr_at(col, row, SELECT_ATTR);
+                set_attr(SELECT_ATTR);            
+            }
         }
         if (i == e_length) clreol();
     }
+    visibile_row_index[row] = i;
+
     // Standard attribute, needed when the marker runs to the end 
     // of the file and therefore does not reset
-    standard();
+    set_attr(DEFAULT_ATTR);
 
     // If we reached the end of the text, fill the rest of the screen with blank lines.
     while (row < LINES) {
@@ -583,18 +666,9 @@ void editor_draw(void) MYCC {
     e_redraw_mode = REDRAW_NONE;
 }
 
-void editor_message(const char* msg) MYCC {
-    uint8_t ox, oy;
-    get_cursor_pos(&ox, &oy);
-    set_cursor_pos(0, LINES);
-    if (msg) print("%s", msg);
-    clreol();
-    set_cursor_pos(ox, oy);
-}
-
 void editor_update_filename(void) MYCC {
     set_cursor_pos(0, SCREEN_HEIGHT - 1);
-    highlight();
+    set_attr(SELECT_ATTR);
 
     char offs = 0;
     if (e_filename && strlen(e_filename) > 31) {
@@ -605,13 +679,13 @@ void editor_update_filename(void) MYCC {
     print("%s", prefix);
     print("%s", name);
     if (e_dirty) putch('*'); else putch(' ');
-    standard();
+    set_attr(DEFAULT_ATTR);
     clreol();
 }
 
 void editor_print_hotkey(const char* short_cut_key, const char* description) MYCC {
     int32_t len = HOTKEY_ITEM_WIDTH - (strlen(short_cut_key) + strlen(description));
-    highlight(); print(short_cut_key); standard();
+    set_attr(SELECT_ATTR); print(short_cut_key); set_attr(DEFAULT_ATTR);
     print(" %s", description);
     while (len-- > 0) putch(' ');
 }
@@ -629,9 +703,9 @@ void editor_show_hotkeys(void) MYCC {
 
 void editor_update_status(char key) MYCC {
     static uint8_t wasdirty = 0;
-    
-    int32_t cursor_row, cursor_col;
-    uint8_t ox, oy;
+    static int32_t cursor_row, cursor_col;
+    static uint8_t ox, oy;
+
     get_cursor_pos(&ox, &oy);
     editor_get_cursor_position(&cursor_row, &cursor_col);
 
@@ -639,16 +713,45 @@ void editor_update_status(char key) MYCC {
         wasdirty = e_dirty;
         editor_update_filename();
     }
+    set_attr(DEFAULT_ATTR);
     set_cursor_pos(40, SCREEN_HEIGHT - 1);
     print("Mem: %ld Ln %ld, Col %ld Key: %d", text_buffer_size - e_length, cursor_row + 1, cursor_col + 1, key);
     clreol();
     set_cursor_pos(ox, oy);
 }
 
+void editor_highlight_current_line(void) MYCC {
+    static uint32_t row;
+    static uint8_t screen_col;
+    static uint8_t screen_row;
+
+    get_cursor_pos(&screen_col, &screen_row);
+    row = e_cursor_row;
+    
+    if (prev_highlight_row != -1 && prev_highlight_row != e_cursor_row) {
+        if (prev_highlight_row >= e_row_offset && prev_highlight_row < e_row_offset + LINES - 1) {
+            static uint32_t prev_screen_row;
+            prev_screen_row = prev_highlight_row - e_row_offset;
+            for(screen_col = 0; screen_col < COLS; ++screen_col) {
+                set_attr_at(screen_col, prev_screen_row, DEFAULT_ATTR);
+            }
+        }
+    }
+
+    if (e_mark_start == -1) {
+        for(screen_col = 0; screen_col < COLS; ++screen_col) {
+            set_attr_at(screen_col, screen_row, HIGHLIGHT_ATTR);
+        }
+        prev_highlight_row = e_cursor_row;
+    } else {
+        prev_highlight_row = -1;
+    }
+}
+
 void set_attr_region(int32_t from, int32_t to, uint8_t a) {
-    static int32_t s, e;
-    static int32_t row, col;
-    static int32_t pos;
+    int32_t s, e;
+    int32_t row, col;
+    int32_t pos;
     
     s = from;
     e = to;
@@ -671,7 +774,7 @@ void set_attr_region(int32_t from, int32_t to, uint8_t a) {
         row++;
     }
 
-    col = -e_col_offset;
+    col = 0;
     pos = visibile_row_index[row];
     while (pos < s) {
         char c = editor_get_char(pos);
@@ -684,16 +787,24 @@ void set_attr_region(int32_t from, int32_t to, uint8_t a) {
         set_attr_at(col, row, a);
         if (c == NL) {
             row++;
-            col = -e_col_offset;
+            col = 0;
+            pos += e_col_offset;
         } else {
-            col++;
-        }        
-        pos++;
+            col++;            
+        }         
+        pos++;       
     }
 }
 
 void editor_redraw(void) MYCC {
     editor_update_scroll();
+
+    if (e_redraw_mode == REDRAW_ALL) {
+        editor_draw();
+        prev_mark_start = e_mark_start;
+        prev_mark_end   = e_gap_start;
+        e_redraw_mode = REDRAW_NONE;
+    }
 
     if (e_mark_start != -1) {
         // Normalize new selection to [new_start, new_end)
@@ -719,27 +830,24 @@ void editor_redraw(void) MYCC {
                 // --- LEFT SIDE DIFF ---
                 // If the left boundary moved right: unmark what was lost on the left
                 if (old_start < new_start) {
-                    set_attr_region(old_start, new_start, 0b00000000);
+                    set_attr_region(old_start, new_start, DEFAULT_ATTR);
                 }
                 // If the left boundary moved left: mark what was gained on the left
                 else if (new_start < old_start) {
-                    set_attr_region(new_start, old_start, 0b00010000);
+                    set_attr_region(new_start, old_start, SELECT_ATTR);
                 }
 
                 // --- RIGHT SIDE DIFF ---
                 // If the right boundary moved left: unmark what was lost on the right
                 if (old_end > new_end) {
-                    set_attr_region(new_end, old_end, 0b00000000);
+                    set_attr_region(new_end, old_end, DEFAULT_ATTR);
                 }
                 // If the right boundary moved right: mark what was gained on the right
                 else if (new_end > old_end) {
-                    set_attr_region(old_end, new_end, 0b00010000);
+                    set_attr_region(old_end, new_end, SELECT_ATTR);
                 }
             }
         }
-
-        // Store raw endpoints (anchor/cursor) or normalized—your choice.
-        // If other code assumes raw, keep this as-is:
         prev_mark_start = e_mark_start;
         prev_mark_end   = e_gap_start;
     }
@@ -754,6 +862,8 @@ void editor_redraw(void) MYCC {
     int32_t cursor_row, cursor_col;
     editor_get_cursor_position(&cursor_row, &cursor_col);
     update_hardware_cursor(cursor_col, cursor_row);
+
+    editor_highlight_current_line();
 }
 
 CommandAction confirm(const char* prompt) MYCC {
@@ -1124,8 +1234,9 @@ CommandAction editor_mark(void) MYCC {
     else {
         e_mark_start = -1;
         prev_mark_start = prev_mark_end = -1;
-        e_redraw_mode = REDRAW_ALL;
     }
+    e_redraw_mode = REDRAW_ALL;
+
     return COMMAND_ACTION_NONE;
 }
 
@@ -1229,7 +1340,7 @@ CommandAction editor_find(void) MYCC {
         }
         set_cursor_pos(0, LINES);
     }
-    editor_move_cursor_to(e_mark_start);
+    if (e_mark_start != -1) editor_move_cursor_to(e_mark_start);
     e_mark_start = -1;
     prev_mark_start = prev_mark_end = -1;
     e_redraw_mode = REDRAW_CURSOR;
@@ -1406,8 +1517,11 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
     e_mark_start = -1;
     e_file_too_large = 0;
     e_redraw_mode = REDRAW_ALL;
-
+    
     prev_mark_start = prev_mark_end = -1;
+    prev_highlight_row = -1;
+
+    memset(&visibile_row_index[0], 0xff, sizeof(visibile_row_index));
 
     filename[0] = '\0';
 
@@ -1443,6 +1557,11 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
         editor_update_status(ch);
         if (e_dirty & FLAG_AUTOSAVE) editor_autosave();
         editor_ready();
+
+        char buf[40];
+        sprintf(buf, "%c, %c", e_gap_start < e_length ? editor_get_char(e_gap_start) : ' ', 
+                               e_gap_end < text_buffer_size-1 ? editor_get_char(e_gap_end) : ' ');
+        editor_message(buf);                        
         ch = getch();
         switch (ch) {
             case KEY_WORDLEFT:
@@ -1483,7 +1602,7 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
                         editor_insert_newline();
                         break;
                     default:
-                        if (ch >= 32 && ch <= 127) {
+                        if (ch >= 32 && ch <= 143) {
                             editor_insert((char)ch);
                         }
                         else {
