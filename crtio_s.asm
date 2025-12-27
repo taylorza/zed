@@ -1,5 +1,4 @@
 SECTION code_l
-PUBLIC _setup_caret_sprite
 PUBLIC _kbd_scan
 PUBLIC _kbstate
 
