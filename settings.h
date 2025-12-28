@@ -10,6 +10,8 @@ typedef struct {
     uint8_t caret_default;
     uint8_t caret_caps;
     uint8_t caret_graphics;
+
+    char font[256];
 } EditorSettings;
 
 extern EditorSettings current_settings;

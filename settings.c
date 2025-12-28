@@ -18,6 +18,7 @@ EditorSettings current_settings = {
     .caret_default  = 0b11001111, /* magenta */
     .caret_caps     = 0b11111111, /* white */
     .caret_graphics = 0b00011100, /* green */
+    .font           = "",
 };
 
 static char *trim(char *s) {
@@ -69,7 +70,11 @@ static void settings_apply_line(char *line) {
     char* val = trim(eq + 1);
     if (!key || !val || !*val) return;
 
-    uint32_t v = parse_number(val);   
+    uint32_t v = 0;
+    if (isdigit(val[0])) {
+        v = parse_number(val);   
+    }
+
     if (strcmp(key, "background") == 0) {
         current_settings.background = (uint8_t)v;
     } else if (strcmp(key, "foreground") == 0) {
@@ -81,7 +86,9 @@ static void settings_apply_line(char *line) {
     } else if (strcmp(key, "caret_caps") == 0) {
         current_settings.caret_caps = (uint8_t)v;
     } else if (strcmp(key, "caret_graphics") == 0) {
-        current_settings.caret_graphics = (uint8_t)v;
+       current_settings.caret_graphics = (uint8_t)v;
+    } else if (strcmp(key, "font") == 0) {
+        strcpy(current_settings.font, val);
     }
 }
 
@@ -187,4 +194,6 @@ void settings_apply(void) {
         current_settings.caret_caps,
         current_settings.caret_graphics
     );
+
+    crt_load_font(current_settings.font);
 }

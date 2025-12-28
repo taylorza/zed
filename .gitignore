@@ -3,6 +3,8 @@
 /zed_CODE.bin
 /zed_MAIN.bin
 *.lis
+*.o
+font.bin
 zed
 
 zed.zip

@@ -15,6 +15,8 @@
 #define REPEAT_DELAY 20
 #define REPEAT_RATE  2
 
+#define ULA_ATTR_MAP    0x5800
+
 #define START_BANKS     0x4000
 #define START_MAP       0x4000
 #define START_TILE_DEF  0x5400      // After 80x32 timemap with attributes
@@ -164,6 +166,22 @@ void crt_apply_settings_colors(uint8_t bg, uint8_t fg, uint8_t highlight, uint8_
     ZXN_NEXTREGA(0x41, bg);
 }
 
+void crt_load_font(const char* font_path) MYCC {
+    uint8_t fh = 255;
+
+    if (font_path && *font_path) {        
+        fh = esxdos_f_open((char*)font_path, ESXDOS_MODE_R | ESXDOS_MODE_OE);                     
+    }
+
+    if (fh == 255) {
+        // Load default embedded font
+        fh = esxdos_m_gethandle();
+    }
+    
+    esxdos_f_read(fh, (void*)START_TILE_DEF, 1792);
+    esxdos_f_close(fh);
+}
+
 // src: 8-bit input
 // dst: array of 4 bytes
 // 1 → 0000, 0 → 0011
@@ -234,11 +252,7 @@ void screen_init(void) MYCC {
         ZXN_NEXTREG(0x38, 0);
     }
 
-    //memcpy((void*)START_TILE_DEF, &font_crtio[0], sizeof(font_crtio));
-    uint8_t fh = esxdos_m_gethandle();
-    esxdos_f_read(fh, (void*)START_TILE_DEF, 896);
-    esxdos_f_close(fh);
-    
+
     setup_caret_sprites();
     update_caret();
     show_caret();
@@ -251,6 +265,8 @@ void screen_init(void) MYCC {
 
 void screen_restore(void) MYCC {
     memset((void*)START_MAP, 0, 6144);
+    memset((void*)ULA_ATTR_MAP, 56, 768);
+     
     hide_caret();
     ZXN_NEXTREGA(0x14, old_reg_14);
     ZXN_NEXTREGA(0x15, old_reg_15);
