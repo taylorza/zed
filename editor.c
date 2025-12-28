@@ -675,7 +675,7 @@ void editor_update_filename(void) MYCC {
         offs = strlen(e_filename) - 31;
     }
     const char* prefix = offs ? "..." : "";
-    const char* name = e_filename ? e_filename + offs : "Untitled";
+    const char* name = e_filename ? (const char*)(e_filename + offs) : "Untitled";
     print("%s", prefix);
     print("%s", name);
     if (e_dirty) putch('*'); else putch(' ');

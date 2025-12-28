@@ -11,7 +11,7 @@ CFLAGS = --list -m -c -clib=sdcc_iy -SO3 -opt-code-size --max-allocs-per-node$(M
 AFLAGS =
 LFLAGS = --list -m -startup=30 -clib=sdcc_iy -subtype=dotn -SO3 -opt-code-size --max-allocs-per-node$(MAX_ALLOCS) -pragma-include:zpragma.inc -create-app
 
-SOURCES = buffers.c buffers_s.asm crtio.c crtio_s.asm editor.c main.c 
+SOURCES = buffers.c buffers_s.asm crtio.c crtio_s.asm editor.c settings.c main.c 
 
 OBJFILES = $(patsubst %.c,$(OUTPUT_DIR)/%.o,$(SOURCES))
 
@@ -37,12 +37,14 @@ $(OUTPUT_DIR)/%.o: %.c | $(OUTPUT_DIR)
 	$(ZCC) $(TARGET) $(CFLAGS) $< -o $@
 	@echo "-> Generated $@"
 
-compile: $(OBJFILES)
+compile: $(OBJFILES)	
 	@echo "Compilation complete."
 
 $(TARGET_BIN): $(OBJFILES)
 	@echo "Linking into $(TARGET_BIN)..."
 	$(ZCC) $(TARGET) $(LFLAGS) -o$(TARGET_BIN) $(OBJFILES)
+	$(ASM) font.asm -b
+	copy /b zed+font.bin zed
 	@echo "-> Created $(TARGET_BIN)"
 
 link: $(TARGET_BIN)
@@ -52,4 +54,5 @@ clean:
 	@echo "Cleaning generated files..."
 	rm -rf $(OUTPUT_DIR) $(TARGET_BIN)
 	rm -f *.lis
+	rm -f font.bin font.o
 	@echo "Clean complete."

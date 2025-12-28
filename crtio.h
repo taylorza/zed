@@ -63,6 +63,8 @@ void get_cursor_pos(uint8_t *x, uint8_t *y) MYCC;
 void set_attr(uint8_t a) MYCC;
 void set_attr_at(uint8_t x, uint8_t y, uint8_t a) MYCC;
 
+void crt_apply_settings_colors(uint8_t bg, uint8_t fg, uint8_t highlight, uint8_t caret_def, uint8_t caret_caps, uint8_t caret_graphics) MYCC;
+
 uint8_t is_insert_mode(void) MYCC;
 
 uint16_t get_ticks(void) MYCC;

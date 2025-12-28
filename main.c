@@ -6,6 +6,7 @@
 #include "platform.h"
 #include "buffers.h"
 #include "crtio.h"
+#include "settings.h"
 #include "editor.h"
 
 uint8_t oldspeed;
@@ -25,6 +26,14 @@ void init(void) {
 
 int main(int argc, char *argv[]) { 
     init();
+
+    // Load editor settings
+    if (settings_load("c:/sys/zed.cfg") == -1) {
+        // If not found, save default settings
+        settings_save("c:/sys/zed.cfg");
+    }
+    settings_apply();
+    
     screen_init();
 
     char *filename = NULL;

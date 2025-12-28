@@ -5,10 +5,12 @@
 #include <intrinsic.h>
 #include <z80.h>
 #include <arch/zxn.h>
+#include <arch/zxn/esxdos.h>
 
 #include "platform.h"
-#include "font.h"
+//#include "font.h"
 #include "crtio.h"
+#include "settings.h"
 
 #define REPEAT_DELAY 20
 #define REPEAT_RATE  2
@@ -77,9 +79,13 @@ const uint8_t ext[] = {
 
 char * const screen = (char * const)START_MAP;
 
-uint8_t old_reg_4b;
-uint8_t old_reg_6b;
+uint8_t old_reg_14;
 uint8_t old_reg_15;
+uint8_t old_reg_4a;
+uint8_t old_reg_4b;
+uint8_t old_reg_4c;
+uint8_t old_reg_6b;
+
 
 uint8_t old_border;
 
@@ -127,9 +133,36 @@ extern void kbd_scan(void) MYCC;
 void position_caret(void) MYCC;
 void update_caret(void) MYCC;
 
-#define BACKGROUND_COLOR 0b00000010     // Blue
-#define FOREGROUND_COLOR 0b11111100     // Yellow
-#define HIGHLIGHT_COLOR  0b00001011     // Light Blue
+
+void crt_apply_settings_colors(uint8_t bg, uint8_t fg, uint8_t highlight, uint8_t caret_def, uint8_t caret_caps, uint8_t caret_graphics) MYCC {
+    /* Sprite palette */
+    ZXN_NEXTREG(0x43, 0b00100000);
+    ZXN_NEXTREG(0x40, 0);
+    ZXN_NEXTREGA(0x41, caret_def);
+    ZXN_NEXTREG(0x40, 16);
+    ZXN_NEXTREGA(0x41, caret_caps);
+    ZXN_NEXTREG(0x40, 32);
+    ZXN_NEXTREGA(0x41, caret_graphics);
+
+    /* Tilemap palette */
+    ZXN_NEXTREG(0x43, 0b00110000);
+    ZXN_NEXTREG(0x40, 0);
+    ZXN_NEXTREGA(0x41, bg);
+    ZXN_NEXTREGA(0x41, fg);
+
+    ZXN_NEXTREG(0x40, 16);
+    ZXN_NEXTREGA(0x41, fg);
+    ZXN_NEXTREGA(0x41, bg);
+
+    ZXN_NEXTREG(0x40, 32);
+    ZXN_NEXTREGA(0x41, highlight);
+    ZXN_NEXTREGA(0x41, fg);
+
+    /*ULA 2nd Palette*/
+    ZXN_NEXTREG(0x43, 0b01000010);
+    ZXN_NEXTREG(0x40, 16); // Paper 0 palette entry
+    ZXN_NEXTREGA(0x41, bg);
+}
 
 // src: 8-bit input
 // dst: array of 4 bytes
@@ -141,7 +174,6 @@ void expand_bits_to_nibbles(uint8_t src, uint8_t dst[8]) {
     dst[2] = (map[(src >> 3) & 1] << 4) | map[(src >> 2) & 1];
     dst[3] = (map[(src >> 1) & 1] << 4) | map[(src >> 0) & 1];
 }
-
 
 void setup_caret_sprites(void) MYCC {
     uint8_t pixels[128];
@@ -160,42 +192,25 @@ void setup_caret_sprites(void) MYCC {
         }
         intrinsic_outi((void*)pixels, __IO_SPRITE_PATTERN, 128);  
     }
-    ZXN_NEXTREGA(0x15, 0b01000011);     // Enable sprites, SLU
 }
 
 void screen_init(void) MYCC {
     cx = 0;
     cy = 0;
-    old_reg_4b = ZXN_READ_REG(0x4b);
-    old_reg_6b = ZXN_READ_REG(0x6b);
+    old_reg_14 = ZXN_READ_REG(0x14);
     old_reg_15 = ZXN_READ_REG(0x15);
+    old_reg_4a = ZXN_READ_REG(0x4a);
+    old_reg_4b = ZXN_READ_REG(0x4b);
+    old_reg_4c = ZXN_READ_REG(0x4c);
+    old_reg_6b = ZXN_READ_REG(0x6b);
+    
     old_border = ((*(uint8_t*)(0x5c48)) & 0b00111000) >> 3;
 
-    zx_border(1);
-    // Sprite palette
-    ZXN_NEXTREG(0x4b, 0xe3);            // Transparency index
-    ZXN_NEXTREG(0x43, 0b00100000);      // Sprite palette 1 auto increment
-    ZXN_NEXTREG(0x40, 0);             
-    ZXN_NEXTREG(0x41, 0b11001111);      // 0-Magenta
-    ZXN_NEXTREG(0x40, 16);
-    ZXN_NEXTREG(0x41, 0b11111111);      // 16-White
-    ZXN_NEXTREG(0x40, 32);
-    ZXN_NEXTREG(0x41, 0b00011100);      // 32-Green
-
-    // Tilemap palette
-    ZXN_NEXTREG(0x43, 0b00110000);      // Tilemap palette 1 auto increment
-    ZXN_NEXTREG(0x40, 0);             
-    ZXN_NEXTREG(0x41, BACKGROUND_COLOR);      // 0-Blue
-    ZXN_NEXTREG(0x41, FOREGROUND_COLOR);      // 1-Yellow
+    ZXN_NEXTREG(0x14, 0xe3);            // Global Transparency index
+    ZXN_NEXTREG(0x4a, 0xe3);            // Fallback Transparency index
+    ZXN_NEXTREG(0x4b, 0xe3);            // Sprite Transparency index
+    ZXN_NEXTREG(0x4c, 0x0f);            // Tilemap Transparency index
     
-    ZXN_NEXTREG(0x40, 16);             
-    ZXN_NEXTREG(0x41, FOREGROUND_COLOR);      // 0-Yellow
-    ZXN_NEXTREG(0x41, BACKGROUND_COLOR);      // 1-Blue
-
-    ZXN_NEXTREG(0x40, 32);             
-    ZXN_NEXTREG(0x41, HIGHLIGHT_COLOR);       // 0-Light Blue
-    ZXN_NEXTREG(0x41, FOREGROUND_COLOR);      // 1-Yellow
-
     ZXN_NEXTREG(0x6b, 0b11001001);      // 80x32 text mode with attributes
     ZXN_NEXTREGA(0x6e, OFFSET_MAP);
     ZXN_NEXTREGA(0x6f, OFFSET_TILES);
@@ -219,20 +234,31 @@ void screen_init(void) MYCC {
         ZXN_NEXTREG(0x38, 0);
     }
 
-    memcpy((void*)START_TILE_DEF, &font_crtio[0], sizeof(font_crtio));
+    //memcpy((void*)START_TILE_DEF, &font_crtio[0], sizeof(font_crtio));
+    uint8_t fh = esxdos_m_gethandle();
+    esxdos_f_read(fh, (void*)START_TILE_DEF, 896);
+    esxdos_f_close(fh);
     
     setup_caret_sprites();
     update_caret();
     show_caret();
     cls();
+
+    ZXN_NEXTREGA(0x15, 0b01000011);     // Enable sprites, SLU
+
+    zx_border(0);
 }
 
 void screen_restore(void) MYCC {
     memset((void*)START_MAP, 0, 6144);
     hide_caret();
-    ZXN_NEXTREGA(0x6b, old_reg_6b);
+    ZXN_NEXTREGA(0x14, old_reg_14);
     ZXN_NEXTREGA(0x15, old_reg_15);
+    ZXN_NEXTREGA(0x4a, old_reg_4a);
     ZXN_NEXTREGA(0x4b, old_reg_4b);
+    ZXN_NEXTREGA(0x4c, old_reg_4c);
+    ZXN_NEXTREGA(0x6b, old_reg_6b);
+    
     zx_border(old_border);
 }
 
