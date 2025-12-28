@@ -553,7 +553,7 @@ void editor_draw_line(void) MYCC {
     row = e_cursor_row - e_row_offset;
     i = visibile_row_index[row];
 
-    set_attr(should_mark? SELECT_ATTR : HIGHLIGHT_ATTR);
+    set_attr(should_mark? DEFAULT_ATTR : HIGHLIGHT_ATTR);
     for (col = 0; col < COLS && i < e_length; ++col, ++i) {
         char c = editor_get_char(i);
         if (should_mark) {
@@ -1558,10 +1558,6 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
         if (e_dirty & FLAG_AUTOSAVE) editor_autosave();
         editor_ready();
 
-        char buf[40];
-        sprintf(buf, "%c, %c", e_gap_start < e_length ? editor_get_char(e_gap_start) : ' ', 
-                               e_gap_end < text_buffer_size-1 ? editor_get_char(e_gap_end) : ' ');
-        editor_message(buf);                        
         ch = getch();
         switch (ch) {
             case KEY_WORDLEFT:
