@@ -10,6 +10,7 @@
 
 #include "platform.h"
 #include "buffers.h"
+#include "settings.h"
 #include "crtio.h"
 #include "editor.h"
 
@@ -210,7 +211,7 @@ void editor_insert(char c) MYCC {
         visibile_row_index[row] = e_gap_start;
     }
     
-    if (!is_insert_mode() && c != NL && e_gap_end < text_buffer_size && get_text_char(e_gap_start) != NL) {        
+    if (!is_insert_mode() && c != NL && e_gap_end < text_buffer_size && get_text_char(e_gap_end) != NL) {        
         set_text_char(e_gap_end, c);
         editor_move_right();
     } else {
@@ -705,6 +706,8 @@ void editor_update_status(char key) MYCC {
     static uint8_t wasdirty = 0;
     static int32_t cursor_row, cursor_col;
     static uint8_t ox, oy;
+    static KeyMode last_key_mode = KEYMODE_CODEPOINT; // unlikey at start :)
+    static KeyMode key_mode;
 
     get_cursor_pos(&ox, &oy);
     editor_get_cursor_position(&cursor_row, &cursor_col);
@@ -713,10 +716,12 @@ void editor_update_status(char key) MYCC {
         wasdirty = e_dirty;
         editor_update_filename();
     }
+
     set_attr(DEFAULT_ATTR);
     set_cursor_pos(40, SCREEN_HEIGHT - 1);
-    print("Mem: %ld Ln %ld, Col %ld Key: %d", text_buffer_size - e_length, cursor_row + 1, cursor_col + 1, key);
+    print("Mem: %ld Ln %ld, Col %ld Key: %d", text_buffer_size - e_length, cursor_row + 1, cursor_col + 1, key);    
     clreol();
+
     set_cursor_pos(ox, oy);
 }
 
@@ -1559,6 +1564,11 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
         editor_ready();
 
         ch = getch();
+        if (get_key_mode() == KEYMODE_CODEPOINT) {
+            editor_insert(ch);
+            continue;
+        }
+
         switch (ch) {
             case KEY_WORDLEFT:
                 editor_move_word(-1);
@@ -1586,6 +1596,11 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
             case KEY_DOWN:
                 editor_move_down();
                 break;
+            case KEY_EXTEND_2:
+                if (e_dirty) editor_save();
+                settings_load(NULL);
+                settings_apply();
+                break;
             default:
                 switch (ch) {
                     case KEY_BACKSPACE:
@@ -1598,7 +1613,7 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
                         editor_insert_newline();
                         break;
                     default:
-                        if (ch >= 32 && ch <= 143) {
+                        if (ch >= 32 && ch <= 164) {
                             editor_insert((char)ch);
                         }
                         else {

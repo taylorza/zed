@@ -18,7 +18,7 @@
 
 // allocate pages for 0x6000 and up
 #pragma output CRT_ORG_MAIN = 0x6000
-#pragma output DOTN_MAIN_ABSOLUTE_MASK = 0x07
+#pragma output DOTN_MAIN_ABSOLUTE_MASK = 0x87
 
 //#pragma output DOTN_MAIN_ABSOLUTE_MASK = 0x0F
 

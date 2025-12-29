@@ -155,12 +155,13 @@
 <p>If the specified file exists, it will be loaded into the editor. Otherwise, a new document will be created with the filename prefilled.</p>
 <pre><code class="language-bash">.zed readme.txt
 </code></pre>
-<p>To open a file with the cursor positioned at a specific line and column, use the `+` prefix when specifying the location.
+<p>To open a file with the cursor positioned at a specific line and column, use the <code>+</code> prefix when specifying the location.
 For example, to start the editor on line 16, run:</p>
 <pre><code class="language-bash">.zed +16 readme.txt
 </code></pre>
 <p>You can also specify a column within the line:</p>
-<pre><code class="language-bash">.zed +16,7 readme.txt</code></pre>
+<pre><code class="language-bash">.zed +16,7 readme.txt
+</code></pre>
 <hr>
 <h2 id="editing-files">Editing files</h2>
 <p>After launching, you can immediately start editing. Use the cursor/arrow keys for navigation as expected.</p>
@@ -240,7 +241,12 @@ For example, to start the editor on line 16, run:</p>
 <li>Press <code>↑X</code> to cut (copy to buffer and remove from the document).</li>
 <li>Navigate to a new location and press <code>↑V</code> to paste.</li>
 </ul>
-<p><strong>NOTE:</strong> The copy buffer is limited to 2K. The marker will adjust automatically to prevent exceeding this limit.</p>
+<h4 id="cutting-lines">Cutting Lines:</h4>
+<ul>
+<li>Press <code>↑K</code> to cut the current line (copy to buffer and remove from the document).</li>
+<li>Navigate to a new location and press <code>↑V</code> to paste.</li>
+</ul>
+<p><strong>NOTE:</strong> The copy buffer is limited to 8K. The start/anchor will adjust automatically to prevent exceeding this limit.</p>
 <h3 id="other-commands">Other commands</h3>
 <table>
 <thead>
@@ -266,8 +272,59 @@ For example, to start the editor on line 16, run:</p>
 <td><code>↑Q</code> Quit</td>
 <td>Exits the editor. You will be prompted to save if the document has unsaved changes.</td>
 </tr>
+<tr>
+<td><code>↑EDIT</code></td>
+<td>Toggle insert/overwrite mode.</td>
+</tr>
+<tr>
+<td><code>↑0</code></td>
+<td>Enter codepoint input mode to insert characters by their hexadecimal codepoint (20-ff).</td>
+</tr>
+<tr>
+<td><code>GRAPH</code></td>
+<td>Toggle graphics character mode.</td>
+</tr>
+<tr>
+<td><code>INV VIDEO</code></td>
+<td>Toggle inverse video mode for graphics entry.</td>
+</tr>
+<tr>
+<td><code>↑2</code></td>
+<td>Save file and reload settings.</td>
+</tr>
 </tbody>
 </table>
+<h3 id="codepoint-input-mode">Codepoint Input Mode</h3>
+<p>When in codepoint input mode, indicated by the caret changing to a different pattern, you can enter characters by their hexadecimal codepoints.</p>
+<ol>
+<li>Press <code>↑0</code> to enter codepoint input mode.</li>
+<li>Type two hexadecimal digits (0-9, A-F) to specify the character codepoint.</li>
+<li>The character will be inserted at the cursor position.</li>
+<li>Press <code>ESC</code> to exit codepoint input mode without inserting a character.</li>
+</ol>
+<h2 id="settings">Settings</h2>
+<p>The editor settings are stored in a configuration file named <code>zed.cfg</code> located in C:/SYS/ directory on your Next OS SD card.
+You can edit this file directly to change settings such as caret blink rate, key repeat delay, and beep sound, color scheme etc.</p>
+<p>All available settings:</p>
+<pre><code>background=&lt;number&gt;         # Background color (default 0x02)
+foreground=&lt;number&gt;         # Foreground color (default 0xfc)
+highlight=&lt;number&gt;          # Highlight Background color (default 0x0b)
+
+caret_default=&lt;number&gt;      # Caret default color (0-255) (default 0xcf)
+caret_caps=&lt;number&gt;         # Caret color when caps lock is on (0-255) (default 0xff)
+caret_graphics=&lt;number&gt;     # Caret color in graphics mode (0-255) (default 0x1c)
+
+repeat_delay=&lt;number&gt;       # Key repeat delay (1-255) higher is longer delay (default 0x14)
+repeat_rate=&lt;number&gt;        # Key repeat rate (1-255) higher is slower repeat (default 0x02)
+blink_rate=&lt;number&gt;         # Caret blink rate (1-255) higher is slower (default 0x0f)
+key_beep_cycles=&lt;number&gt;    # Keyboard beep sound (0-off) (default 0x00)
+key_beep_period=&lt;number&gt;    # Keyboard beep half period per cycle (1-65535) (default 0x8c)
+
+font=&lt;filename&gt;             ; Font file to load (Default is built-in font)
+</code></pre>
+<p>Colors are 3-3-2 bit RGB format
+All numbers can be entered as decimal values, hex values (0x00-0xFF) or binary values (0b00000000-0b11111111).
+Any setting not specified in the config file will use the default value.</p>
 
             
             

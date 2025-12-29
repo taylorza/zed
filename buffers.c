@@ -7,7 +7,7 @@
 
 #include "platform.h"
 #include "buffers.h"
-#include "crtio.h"
+
 
 // 8K Pages
 #define PAGE_SIZE  ((int32_t)8192)
@@ -21,7 +21,7 @@ char scratch_buffer[SCRATCH_BUFFER_SIZE];
 char tmpbuffer[MAX_FILENAME_LEN+4];
 uint8_t old_mmu;
 
-void init_buffers(void) {
+void buffers_init(void) {
     memset(pages, 0, sizeof(pages));
     uint8_t avail_pages = esx_ide_bank_avail(ESX_BANKTYPE_RAM);
     if (avail_pages > MAX_PAGES) avail_pages = MAX_PAGES;
@@ -32,7 +32,7 @@ void init_buffers(void) {
     }
 }
 
-void release_buffers(void) {
+void buffers_release(void) {
     ZXN_WRITE_MMU7(old_mmu);
     for(uint8_t i=0; i<MAX_PAGES;++i) {
         uint8_t mmu_page = pages[i];

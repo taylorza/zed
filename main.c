@@ -2,39 +2,46 @@
 #include <stdio.h>
 #include <z80.h>
 #include <arch/zxn.h>
+#include <intrinsic.h>
 
 #include "platform.h"
 #include "buffers.h"
-#include "crtio.h"
 #include "settings.h"
+#include "crtio.h"
 #include "editor.h"
 
 uint8_t oldspeed;
+uint8_t old_mmu7;
 
 void cleanup(void) {
-    release_buffers();
+    ula_screen_restore();
     screen_restore();
+    buffers_release();    
+    ZXN_WRITE_MMU7(old_mmu7);
     ZXN_NEXTREGA(0x07, oldspeed);
 }
 
 void init(void) {
     atexit(cleanup);
-    init_buffers();
+    old_mmu7 = ZXN_READ_MMU7();
     oldspeed = ZXN_READ_REG(0x07) & 0x03;
-    ZXN_NEXTREG(0x07, 3);
+    ZXN_NEXTREG(0x07, 3);    
 }
 
 int main(int argc, char *argv[]) { 
     init();
+    
+    ula_screen_save();
 
     // Load editor settings
-    if (settings_load("c:/sys/zed.cfg") == -1) {
+    if (settings_load(NULL) == -1) {
         // If not found, save default settings
-        settings_save("c:/sys/zed.cfg");
+        settings_save(NULL);
     }
     settings_apply();
-    
+
     screen_init();
+    buffers_init();
 
     char *filename = NULL;
     int32_t line = 0;

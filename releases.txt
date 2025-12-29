@@ -7,8 +7,10 @@
 - New Feature: Highlight the current line
 - New Feature: Overwrite mode (Extend+Edit toggles)
 - New Feature: Type graphics characters (Inverse toggles inverse graphics)
-- New Feature: Configurable color scheme
+- New Feature: Configurable color scheme, font, key clicks, key repeat rate etc.
+               Settings can be dynamically reload without leaving the editor
 - New Feature: User defined font
+- New Feature: Enter character extended characters
 
 2025/08/19 - Version 0.4
 - Support for large files up to max available memory

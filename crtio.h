@@ -22,7 +22,9 @@
 #define KEY_BACKSPACE   0x0a
 #define KEY_ENTER       0x0d
 
+#define KEY_CODEPOINT   176 // Extended + 0
 #define KEY_INSERT      177 // Extended + Edit
+#define KEY_EXTEND_2    178 // Extended + 2
 
 #define KEY_WORDLEFT    181
 #define KEY_PAGEDOWN    182
@@ -37,12 +39,22 @@
 #define KEY_FIND        230
 #define KEY_SAVE        243
 #define KEY_GOTO        231
-#define KEY_CUTLINE     235 // ^K
+#define KEY_CUTLINE     235 // ^x
+
+typedef enum KeyMode {
+    KEYMODE_NORMAL,
+    KEYMODE_GRAPHICS,
+    KEYMODE_INVGRAPHICS,
+    KEYMODE_CODEPOINT,
+} KeyMode;
 
 #define NL              '\r'
 
 void screen_init(void) MYCC;
 void screen_restore(void) MYCC;
+
+void ula_screen_save(void) MYCC;
+void ula_screen_restore(void) MYCC;
 
 void show_caret(void) MYCC;
 void hide_caret(void) MYCC;
@@ -63,10 +75,11 @@ void get_cursor_pos(uint8_t *x, uint8_t *y) MYCC;
 void set_attr(uint8_t a) MYCC;
 void set_attr_at(uint8_t x, uint8_t y, uint8_t a) MYCC;
 
-void crt_apply_settings_colors(uint8_t bg, uint8_t fg, uint8_t highlight, uint8_t caret_def, uint8_t caret_caps, uint8_t caret_graphics) MYCC;
+void crt_apply_settings(EditorSettings *settings) MYCC;
 void crt_load_font(const char* font_path) MYCC;
 
 uint8_t is_insert_mode(void) MYCC;
+KeyMode get_key_mode(void) MYCC;
 
 uint16_t get_ticks(void) MYCC;
 

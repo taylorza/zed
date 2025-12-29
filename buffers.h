@@ -8,8 +8,8 @@ extern char scratch_buffer[];
 extern char tmpbuffer[];
 extern int32_t text_buffer_size;
 
-void init_buffers(void);
-void release_buffers(void);
+void buffers_init(void);
+void buffers_release(void);
 
 char* get_text_ptr(int32_t index) MYCC;
 char get_text_char(int32_t index) MYCC;

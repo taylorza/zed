@@ -4,21 +4,28 @@
 #include <errno.h>
 #include <ctype.h>
 
-#include "settings.h"
 #include "platform.h"
+#include "settings.h"
 #include "crtio.h"
 #ifdef __ZXNEXT
 #include <arch/zxn/esxdos.h>
 #endif
 
+static const char* default_settings_file = "c:/sys/zed.cfg";
+
 EditorSettings current_settings = {
-    .background     = 0b00000010, /* Blue */
-    .foreground     = 0b11111100, /* Yellow */
-    .highlight      = 0b00001011, /* Light Blue */
-    .caret_default  = 0b11001111, /* magenta */
-    .caret_caps     = 0b11111111, /* white */
-    .caret_graphics = 0b00011100, /* green */
-    .font           = "",
+    .background         = 0b00000010, /* Blue */
+    .foreground         = 0b11111100, /* Yellow */
+    .highlight          = 0b00001011, /* Light Blue */
+    .caret_default      = 0b11001111, /* magenta */
+    .caret_caps         = 0b11111111, /* white */
+    .caret_graphics     = 0b00011100, /* green */
+    .repeat_delay       = 20,
+    .repeat_rate        = 2,
+    .blink_rate         = 15,
+    .key_beep_cycles    = 0,
+    .key_beep_period    = 60,
+    .font               = "",
 };
 
 static char *trim(char *s) {
@@ -29,8 +36,8 @@ static char *trim(char *s) {
     return s;
 }
 
-static int32_t parse_number(const char* s) MYCC {
-    int32_t v = 0;
+static int16_t parse_number(const char* s) MYCC {
+    int16_t v = 0;
     if (strlen(s) >= 2) {
         if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
             s += 2;
@@ -70,7 +77,7 @@ static void settings_apply_line(char *line) {
     char* val = trim(eq + 1);
     if (!key || !val || !*val) return;
 
-    uint32_t v = 0;
+    uint16_t v = 0;
     if (isdigit(val[0])) {
         v = parse_number(val);   
     }
@@ -87,12 +94,24 @@ static void settings_apply_line(char *line) {
         current_settings.caret_caps = (uint8_t)v;
     } else if (strcmp(key, "caret_graphics") == 0) {
        current_settings.caret_graphics = (uint8_t)v;
+    } else if (strcmp(key, "repeat_delay") == 0) {
+        current_settings.repeat_delay = (uint8_t)v;
+    } else if (strcmp(key, "repeat_rate") == 0) {
+        current_settings.repeat_rate = (uint8_t)v;
+    } else if (strcmp(key, "blink_rate") == 0) {
+        current_settings.blink_rate = (uint8_t)v;
+    } else if (strcmp(key, "key_beep_cycles") == 0) {
+        if (v == 1) v = 2; // avoid 1 cycle which is too short to hear
+        current_settings.key_beep_cycles = (uint8_t)v;
+    } else if (strcmp(key, "key_beep_period") == 0) {
+        current_settings.key_beep_period = (uint16_t)v;
     } else if (strcmp(key, "font") == 0) {
         strcpy(current_settings.font, val);
     }
 }
 
 int settings_load(const char* path) {
+    if (path == NULL) path = default_settings_file;
 #ifdef __ZXNEXT
     /* Use ESXDOS low-level file IO */
     errno = 0;
@@ -142,6 +161,7 @@ int settings_load(const char* path) {
 }
 
 int settings_save(const char* path) {
+    if (path == NULL) path = default_settings_file;
 #ifdef __ZXNEXT
     errno = 0;
     char fd = esxdos_f_open((char*)path, ESXDOS_MODE_W | ESXDOS_MODE_CT);
@@ -165,6 +185,19 @@ int settings_save(const char* path) {
     len = snprintf(buf, sizeof(buf), "caret_graphics=0x%02x\n", current_settings.caret_graphics);
     esxdos_f_write(fd, buf, len);
 
+    len = snprintf(buf, sizeof(buf), "repeat_delay=%d\n", current_settings.repeat_delay);
+    esxdos_f_write(fd, buf, len);
+    len = snprintf(buf, sizeof(buf), "repeat_rate=%d\n", current_settings.repeat_rate);
+    esxdos_f_write(fd, buf, len);
+    len = snprintf(buf, sizeof(buf), "blink_rate=%d\n", current_settings.blink_rate);
+    esxdos_f_write(fd, buf, len);
+    len = snprintf(buf, sizeof(buf), "key_beep_cycles=%d\n", current_settings.key_beep_cycles);
+    esxdos_f_write(fd, buf, len);
+    len = snprintf(buf, sizeof(buf), "key_beep_period=%d\n", current_settings.key_beep_period);
+    esxdos_f_write(fd, buf, len);
+
+    esxdos_f_write(fd, "font=\n", 6);
+
     esxdos_f_close(fd);
     return 0;
 #else
@@ -186,14 +219,6 @@ int settings_save(const char* path) {
 }
 
 void settings_apply(void) {
-    crt_apply_settings_colors(
-        current_settings.background,
-        current_settings.foreground,
-        current_settings.highlight,
-        current_settings.caret_default,
-        current_settings.caret_caps,
-        current_settings.caret_graphics
-    );
-
+    crt_apply_settings(&current_settings);
     crt_load_font(current_settings.font);
 }

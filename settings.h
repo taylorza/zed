@@ -10,6 +10,11 @@ typedef struct {
     uint8_t caret_default;
     uint8_t caret_caps;
     uint8_t caret_graphics;
+    uint8_t repeat_delay;
+    uint8_t repeat_rate;
+    uint8_t blink_rate;
+    uint8_t key_beep_cycles;    
+    uint16_t key_beep_period;
 
     char font[256];
 } EditorSettings;

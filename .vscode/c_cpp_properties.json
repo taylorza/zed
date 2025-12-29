@@ -7,7 +7,7 @@
             "d:/tools/z88dk/include/**"
             ],
             "defines": [
-                "__ZXNEXT"
+                "__ZXNEXT", "__CLANG"
             ],
             "windowsSdkVersion": "10.0.18362.0",
             "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools/VC/Tools/MSVC/14.24.28314/bin/Hostx64/x64/cl.exe",
