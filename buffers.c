@@ -18,7 +18,7 @@ uint8_t pages[MAX_PAGES];
 int32_t text_buffer_size;
 
 char scratch_buffer[SCRATCH_BUFFER_SIZE];
-char tmpbuffer[MAX_FILENAME_LEN+4];
+char tmpbuffer[MAX_TEMPBUFFER_LEN];
 uint8_t old_mmu;
 
 void buffers_init(void) {

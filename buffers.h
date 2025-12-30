@@ -3,6 +3,7 @@
 
 #define SCRATCH_BUFFER_SIZE 8192
 #define MAX_FILENAME_LEN 250
+#define MAX_TEMPBUFFER_LEN 256
 
 extern char scratch_buffer[];
 extern char tmpbuffer[];
