@@ -91,7 +91,7 @@ CommandAction editor_find(void) MYCC;
 CommandAction editor_goto(void) MYCC;
 CommandAction editor_quit(void) MYCC;
 
-Command commands[] = {
+static const Command commands[] = {
     {"^S", "Save", KEY_SAVE, editor_save},
     {"^M", "Mark", KEY_MARK, editor_mark},
     {"^C", "Copy", KEY_COPY, editor_copy},
@@ -131,7 +131,7 @@ int32_t to_int32(const char* s, const char** p) MYCC {
 
 int8_t e_busy = -50;
 void editor_busy(void) MYCC {
-    static uint8_t chars[] = {'|','/','-', '\\'};
+    static const uint8_t chars[] = {'|','/','-', '\\'};
 
     if (e_busy < 0) {
         ++e_busy;
@@ -164,7 +164,7 @@ char editor_get_char(int32_t index) MYCC {
         return get_text_char((index - e_gap_start) + e_gap_end);
 }
 
-inline void editor_update_row_index(uint8_t row, int32_t offset) MYCC {
+static void editor_update_row_index(uint8_t row, int32_t offset) MYCC {
     for(uint8_t r=row; r<LINES; ++r) {
         if (visibile_row_index[r] == INVALID_LINE)
             break;
@@ -694,7 +694,7 @@ void editor_print_hotkey(const char* short_cut_key, const char* description) MYC
 void editor_show_hotkeys(void) MYCC {
     set_cursor_pos(0, LINES + 1);
     int32_t i = 0;
-    for (Command* cmd = &commands[0]; cmd->short_cut_key != NULL; ++cmd) {
+    for (const Command* cmd = &commands[0]; cmd->short_cut_key != NULL; ++cmd) {
         editor_print_hotkey(cmd->short_cut_key, cmd->description);
         if (++i % HOTKEY_ITEMS_PER_LINE == 0) putch(NL);
     }
@@ -1617,7 +1617,7 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
                             editor_insert((char)ch);
                         }
                         else {
-                            for (Command* cmd = (Command*)commands; cmd->short_cut_key != NULL; ++cmd) {
+                            for (const Command* cmd = &commands[0]; cmd->short_cut_key != NULL; ++cmd) {
                                 if (ch == cmd->key) {
                                     if (cmd->action) {
                                         CommandAction action = cmd->action();

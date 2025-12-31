@@ -28,7 +28,7 @@ typedef enum EditMode {
 } EditMode;
 
 extern uint8_t kbstate[];
-const uint8_t unshifted [] = {
+static const uint8_t unshifted [] = {
     'a','s','d','f','g',
     'q','w','e','r','t',
     '1','2','3','4','5',
@@ -39,7 +39,7 @@ const uint8_t unshifted [] = {
     0xff,'z','x','c','v',
 };
 
-const uint8_t caps [] = {
+static const uint8_t caps [] = {
     'A','S','D','F','G',
     'Q','W','E','R','T',
     0x01,0x02,0x03,0x04,0x05,
@@ -50,7 +50,7 @@ const uint8_t caps [] = {
     0xff,'Z','X','C','V',
 };
 
-const uint8_t sym[] = {
+static const uint8_t sym[] = {
     '~','|','\\','{', '}',
     0x7f,0x10,0x11,'<','>',
     '!','@','#','$','%',
@@ -61,7 +61,7 @@ const uint8_t sym[] = {
     0xff,':','`','?','/',
 };
 
-const uint8_t ext[] = {
+static const uint8_t ext[] = {
     'a'|0x80,'s'|0x80,'d'|0x80,'f'|0x80,'g'|0x80,
     'q'|0x80,'w'|0x80,'e'|0x80,'r'|0x80,'t'|0x80,
     '1'|0x80,'2'|0x80,'3'|0x80,'4'|0x80,'5'|0x80,
@@ -108,7 +108,7 @@ static uint8_t caret_state[] = {
     0b10000000,     // 0x39 - 4-bit sprite, Y9
 };
 
-static uint8_t spr_carets[] = {
+static const uint8_t spr_carets[] = {
     0b10000000,
     0b10000000,
     0b10000000,
