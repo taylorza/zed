@@ -82,8 +82,8 @@ static uint8_t old_reg_4b;
 static uint8_t old_reg_4c;
 static uint8_t old_reg_6b;
 
-
 static uint8_t old_border;
+static uint8_t old_ula_palette16;
 
 static uint8_t  cx = 0;                 // caret X
 static uint8_t  cy = 0;                 // caret Y
@@ -208,7 +208,7 @@ void crt_load_font(const char* font_path) MYCC {
     
     esxdos_f_read(fh, (void*)START_TILE_DEF, 1792);
     esxdos_f_close(fh);
-}
+}  
 
 // src: 8-bit input
 // dst: array of 4 bytes
@@ -241,11 +241,19 @@ static void setup_caret_sprites(void) MYCC {
 
 void ula_screen_save(void) MYCC {    
     old_border = ((*(uint8_t*)(0x5c48)) & 0b00111000) >> 3;
+
+    ZXN_NEXTREG(0x43, 0b01000010);
+    ZXN_NEXTREG(0x40, 16); // Paper 0 palette entry
+    old_ula_palette16 = ZXN_READ_REG(0x41);
 }
 
 void ula_screen_restore(void) MYCC {
     zx_border(old_border);
     zx_cls(PAPER_WHITE | INK_BLACK);
+
+    ZXN_NEXTREG(0x43, 0b01000010);
+    ZXN_NEXTREG(0x40, 16); // Paper 0 palette entry
+    ZXN_NEXTREGA(0x41, old_ula_palette16);
 }
 
 void screen_init(void) MYCC {
