@@ -25,8 +25,18 @@ EditorSettings current_settings = {
     .blink_rate         = 15,
     .key_beep_cycles    = 0,
     .key_beep_period    = 60,
+    .default_line_ending = LINE_ENDING_CRLF,
     .font               = "",
 };
+
+static uint8_t strieq(const char* a, const char* b) {
+    while (*a && *b) {
+        if (toupper((unsigned char)*a) != toupper((unsigned char)*b)) return 0;
+        ++a;
+        ++b;
+    }
+    return *a == '\0' && *b == '\0';
+}
 
 static char *trim(char *s) {
     while (*s && (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n')) ++s;
@@ -64,6 +74,29 @@ static int16_t parse_number(const char* s) MYCC {
         ++s;
     }
     return v;
+}
+
+static LineEndingStyle parse_line_ending(const char* val) {
+    if (strieq(val, "crlf")) return LINE_ENDING_CRLF;
+    if (strieq(val, "lf")) return LINE_ENDING_LF;
+    if (strieq(val, "cr")) return LINE_ENDING_CR;
+
+    if (isdigit((unsigned char)val[0])) {
+        uint16_t v = parse_number(val);
+        if (v == LINE_ENDING_LF) return LINE_ENDING_LF;
+        if (v == LINE_ENDING_CR) return LINE_ENDING_CR;
+    }
+    return LINE_ENDING_CRLF;
+}
+
+static const char* line_ending_to_string(LineEndingStyle v) {
+    switch (v) {
+        case LINE_ENDING_LF: return "lf";
+        case LINE_ENDING_CR: return "cr";
+        case LINE_ENDING_CRLF:
+        default:
+            return "crlf";
+    }
 }
 
 /* Parse and apply a single line of key=value settings */
@@ -105,6 +138,8 @@ static void settings_apply_line(char *line) {
         current_settings.key_beep_cycles = (uint8_t)v;
     } else if (strcmp(key, "key_beep_period") == 0) {
         current_settings.key_beep_period = (uint16_t)v;
+    } else if (strcmp(key, "default_line_ending") == 0) {
+        current_settings.default_line_ending = parse_line_ending(val);
     } else if (strcmp(key, "font") == 0) {
         strcpy(current_settings.font, val);
     }
@@ -195,6 +230,8 @@ int settings_save(const char* path) {
     esxdos_f_write(fd, buf, len);
     len = snprintf(buf, sizeof(buf), "key_beep_period=%d\n", current_settings.key_beep_period);
     esxdos_f_write(fd, buf, len);
+    len = snprintf(buf, sizeof(buf), "default_line_ending=%s\n", line_ending_to_string(current_settings.default_line_ending));
+    esxdos_f_write(fd, buf, len);
 
     esxdos_f_write(fd, "font=\n", 6);
 
@@ -212,6 +249,7 @@ int settings_save(const char* path) {
     fprintf(f, "caret_default=0x%02x\n", current_settings.caret_default);
     fprintf(f, "caret_caps=0x%02x\n", current_settings.caret_caps);
     fprintf(f, "caret_graphics=0x%02x\n", current_settings.caret_graphics);
+    fprintf(f, "default_line_ending=%s\n", line_ending_to_string(current_settings.default_line_ending));
 
     fclose(f);
     return 0;

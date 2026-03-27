@@ -14,12 +14,12 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.5"
+#define VERSION "0.6"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
 
-#define LINES SCREEN_HEIGHT-5
+#define LINES (SCREEN_HEIGHT-5)
 #define COLS 80
 
 #define AUTO_SAVE_TICKS 6000 // auto save roughly every 2 minutes
@@ -54,6 +54,7 @@ typedef enum CommandAction {
 
 // Editor state
 char* e_filename;             // current filename (null if no filename)
+LineEndingStyle e_line_ending;// line ending style of the current file (determined on load, used on save)
 int32_t e_length;             //
 int32_t e_gap_start;          // the index of the beginning of the gap (cursor position)
 int32_t e_gap_end;            // one past the end of the gap
@@ -130,6 +131,11 @@ int32_t to_int32(const char* s, const char** p) MYCC {
 }
 
 int8_t e_busy = -50;
+
+static LineEndingStyle editor_default_line_ending(void) MYCC {
+    return current_settings.default_line_ending;
+}
+
 void editor_busy(void) MYCC {
     static const uint8_t chars[] = {'|','/','-', '\\'};
 
@@ -242,7 +248,11 @@ void editor_insert_tab(void) MYCC {
 
 /* Insert newline, matching the current lines indent. */
 void editor_insert_newline(void) MYCC {
-    uint32_t pos = editor_find_line_start(e_gap_start - 1);
+    uint32_t pos = 0;
+    if (e_gap_start > 0) {
+        pos = editor_find_line_start(e_gap_start - 1);
+    }
+
     uint8_t spaces = 0;
     while (pos < e_gap_start && get_text_char(pos) == ' ') {
         ++spaces;
@@ -976,15 +986,31 @@ int32_t editor_save_file(uint8_t temp) MYCC {
     static int32_t i;
     static uint8_t j;
     static char ch;
+    LineEndingStyle save_line_ending = e_line_ending == LINE_ENDING_NONE ? editor_default_line_ending() : e_line_ending;
+
     i = 0;
     while (i < e_length) {
         j = 0;        
         while (j < (SAVE_BUF_SIZE>>1) && i < e_length) {
             ch = editor_get_char(i++);
-            buf[j++] = ch;
             if (ch == '\r') {
-                buf[j++] = '\n';            
                 editor_busy();
+                switch (save_line_ending) {
+                    case LINE_ENDING_CR:
+                        buf[j++] = '\r';
+                        break;
+                    case LINE_ENDING_LF:
+                        buf[j++] = '\n';
+                        break;
+                    case LINE_ENDING_CRLF:
+                    default:
+                        buf[j++] = '\r';
+                        buf[j++] = '\n';
+                        break;
+                }
+            }
+            else {
+                buf[j++] = ch;
             }
         }
         esxdos_f_write(f, buf, j);
@@ -1009,6 +1035,8 @@ int32_t editor_save_file(uint8_t temp) MYCC {
     //char f = esxdos_f_open(tmpbuffer, ESXDOS_MODE_W | ESXDOS_MODE_CT);
     if (errno) return errno;
 
+    LineEndingStyle save_line_ending = e_line_ending == LINE_ENDING_NONE ? editor_default_line_ending() : e_line_ending;
+
     int32_t total = editor_length();
     int32_t i = 0;
     while (i < total) {
@@ -1016,8 +1044,24 @@ int32_t editor_save_file(uint8_t temp) MYCC {
         int j = 0;
         while (j < sizeof(buf) >> 1 && i < total) {
             char ch = *p++; i++;
-            buf[j++] = ch;
-            if (ch == '\r') buf[j++] = '\n';
+            if (ch == '\r') {
+                switch (save_line_ending) {
+                    case LINE_ENDING_CR:
+                        buf[j++] = '\r';
+                        break;
+                    case LINE_ENDING_LF:
+                        buf[j++] = '\n';
+                        break;
+                    case LINE_ENDING_CRLF:
+                    default:
+                        buf[j++] = '\r';
+                        buf[j++] = '\n';
+                        break;
+                }
+            }
+            else {
+                buf[j++] = ch;
+            }
         }
         //esxdos_f_write(f, buf, j);
         if (errno) {
@@ -1052,27 +1096,20 @@ void editor_init_file(void) MYCC {
         }
         e_file_too_large = (total_bytes_read >= text_buffer_size);
 
-        typedef enum {
-            LINE_ENDING_NONE = -1,
-            LINE_ENDING_CR = 0,
-            LINE_ENDING_LF = 1,
-            LINE_ENDING_CRLF = 2
-        } LINE_ENDING_STYLE;
-
-        LINE_ENDING_STYLE line_ending_style = LINE_ENDING_NONE;
+        e_line_ending = LINE_ENDING_NONE;
         if (total_bytes_read > 0) {
             // Check the line ending style
             for (i = 0; i < total_bytes_read; ++i) {
                 ch = get_text_char(i);
                 if (ch == '\r') {
-                    line_ending_style = LINE_ENDING_CR;
+                    e_line_ending = LINE_ENDING_CR;
                     if (i + 1 < total_bytes_read && get_text_char(i + 1) == '\n') {
-                        line_ending_style = LINE_ENDING_CRLF;                        
+                        e_line_ending = LINE_ENDING_CRLF;                        
                     }
                     break;
                 }
                 else if (ch == '\n') {
-                    line_ending_style = LINE_ENDING_LF;
+                    e_line_ending = LINE_ENDING_LF;
                     break; // LF found, no need to check further
                 }
             }
@@ -1094,7 +1131,7 @@ void editor_init_file(void) MYCC {
                     bytescopied += 2;
                 }
                 else if (ch == '\n' || ch == '\r') {
-                    if (line_ending_style == LINE_ENDING_CRLF) {
+                    if (e_line_ending == LINE_ENDING_CRLF) {
                         --src;
                     }
                     set_text_char(dst--, NL);
@@ -1129,27 +1166,20 @@ void editor_init_file(void) MYCC {
         }
         e_file_too_large = (total_bytes_read >= text_buffer_size);
 
-        typedef enum {
-            LINE_ENDING_NONE = -1,
-            LINE_ENDING_CR = 0,
-            LINE_ENDING_LF = 1,
-            LINE_ENDING_CRLF = 2
-        } LINE_ENDING_STYLE;
-
-        LINE_ENDING_STYLE line_ending_style = LINE_ENDING_NONE;
+        e_line_ending = LINE_ENDING_NONE;
         if (total_bytes_read > 0) {
             // Check the line ending style
             for (int32_t i = 0; i < total_bytes_read; ++i) {
                 char ch = get_text_char(i);
                 if (ch == '\r') {
-                    line_ending_style = LINE_ENDING_CR;
+                    e_line_ending = LINE_ENDING_CR;
                     if (i + 1 < total_bytes_read && get_text_char(i + 1) == '\n') {
-                        line_ending_style = LINE_ENDING_CRLF;
+                        e_line_ending = LINE_ENDING_CRLF;
                         break; // CRLF found, no need to check further
                     }
                 }
                 else if (ch == '\n') {
-                    line_ending_style = LINE_ENDING_LF;
+                    e_line_ending = LINE_ENDING_LF;
                     break; // LF found, no need to check further
                 }
             }
@@ -1170,7 +1200,7 @@ void editor_init_file(void) MYCC {
                     bytescopied += 2;
                 }
                 else if (ch == '\n' || ch == '\r') {
-                    if (line_ending_style == LINE_ENDING_CRLF) {
+                    if (e_line_ending == LINE_ENDING_CRLF) {
                         --src;
                     }
                     set_text_char(dst--, NL);
@@ -1314,7 +1344,7 @@ int32_t editor_search(const char* str, int32_t startidx) MYCC {
     if (start < 0 || start >= e_length) {
         start = 0;
     }
-    for (i = start; i < e_length - len; ++i) {
+    for (i = start; i <= e_length - len; ++i) {
         for (j = 0; j < len; ++j) {
             if (editor_get_char(i + j) != str[j]) {
                 break;
@@ -1509,6 +1539,7 @@ CommandAction editor_quit(void) MYCC {
 void edit(char* filepath, int32_t line, int32_t col) MYCC {
     /* Initial the editor; the entire space is initially the gap. */
     e_filename = NULL;
+    e_line_ending = editor_default_line_ending();
     e_length = 0;
     e_gap_start = 0;
     e_gap_end = text_buffer_size;

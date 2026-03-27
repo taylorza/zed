@@ -132,6 +132,7 @@ repeat_rate=<number>        # Key repeat rate (1-255) higher is slower repeat (d
 blink_rate=<number>         # Caret blink rate (1-255) higher is slower (default 0x0f)
 key_beep_cycles=<number>    # Keyboard beep sound (0-off) (default 0x00)
 key_beep_period=<number>    # Keyboard beep half period per cycle (1-65535) (default 0x8c)
+default_line_ending=<mode>  # Default line ending for new files: crlf, lf, cr (default crlf)
 
 font=<filename>             ; Font file to load (Default is built-in font)
 ```

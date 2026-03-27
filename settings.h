@@ -3,6 +3,13 @@
 
 #include <stdint.h>
 
+typedef enum {
+    LINE_ENDING_NONE = -1,
+    LINE_ENDING_CR = 0,
+    LINE_ENDING_LF = 1,
+    LINE_ENDING_CRLF = 2
+} LineEndingStyle;
+
 typedef struct {
     uint8_t background;
     uint8_t foreground;
@@ -15,6 +22,7 @@ typedef struct {
     uint8_t blink_rate;
     uint8_t key_beep_cycles;    
     uint16_t key_beep_period;
+    LineEndingStyle default_line_ending;
 
     char font[256];
 } EditorSettings;
