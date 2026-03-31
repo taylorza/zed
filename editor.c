@@ -1174,9 +1174,9 @@ void editor_init_file(void) MYCC {
                 if (ch == '\r') {
                     e_line_ending = LINE_ENDING_CR;
                     if (i + 1 < total_bytes_read && get_text_char(i + 1) == '\n') {
-                        e_line_ending = LINE_ENDING_CRLF;
-                        break; // CRLF found, no need to check further
+                        e_line_ending = LINE_ENDING_CRLF;                        
                     }
+                    break; // CRLF found, no need to check further
                 }
                 else if (ch == '\n') {
                     e_line_ending = LINE_ENDING_LF;
