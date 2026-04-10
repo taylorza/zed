@@ -46,6 +46,7 @@ typedef enum KeyMode {
     KEYMODE_GRAPHICS,
     KEYMODE_INVGRAPHICS,
     KEYMODE_CODEPOINT,
+    KEYMODE_EXTEND,
 } KeyMode;
 
 #define NL              '\r'
@@ -79,6 +80,7 @@ void crt_apply_settings(EditorSettings *settings) MYCC;
 void crt_load_font(const char* font_path) MYCC;
 
 uint8_t is_insert_mode(void) MYCC;
+uint8_t is_extend_key(void) MYCC;
 KeyMode get_key_mode(void) MYCC;
 
 uint16_t get_ticks(void) MYCC;

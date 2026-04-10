@@ -22,6 +22,7 @@ typedef struct {
     uint8_t blink_rate;
     uint8_t key_beep_cycles;    
     uint16_t key_beep_period;
+    uint8_t sticky_extend;
     LineEndingStyle default_line_ending;
 
     char font[256];

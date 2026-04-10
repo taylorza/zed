@@ -25,6 +25,7 @@ EditorSettings current_settings = {
     .blink_rate         = 15,
     .key_beep_cycles    = 0,
     .key_beep_period    = 60,
+    .sticky_extend      = 0,
     .default_line_ending = LINE_ENDING_CRLF,
     .font               = "",
 };
@@ -138,6 +139,8 @@ static void settings_apply_line(char *line) {
         current_settings.key_beep_cycles = (uint8_t)v;
     } else if (strcmp(key, "key_beep_period") == 0) {
         current_settings.key_beep_period = (uint16_t)v;
+    } else if (strcmp(key, "sticky_extend") == 0) {
+        current_settings.sticky_extend = (uint8_t)v;
     } else if (strcmp(key, "default_line_ending") == 0) {
         current_settings.default_line_ending = parse_line_ending(val);
     } else if (strcmp(key, "font") == 0) {
@@ -229,6 +232,8 @@ int settings_save(const char* path) {
     len = snprintf(buf, sizeof(buf), "key_beep_cycles=%d\n", current_settings.key_beep_cycles);
     esxdos_f_write(fd, buf, len);
     len = snprintf(buf, sizeof(buf), "key_beep_period=%d\n", current_settings.key_beep_period);
+    esxdos_f_write(fd, buf, len);
+    len = snprintf(buf, sizeof(buf), "sticky_extend=%d\n", current_settings.sticky_extend);
     esxdos_f_write(fd, buf, len);
     len = snprintf(buf, sizeof(buf), "default_line_ending=%s\n", line_ending_to_string(current_settings.default_line_ending));
     esxdos_f_write(fd, buf, len);

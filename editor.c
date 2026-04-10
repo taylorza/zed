@@ -14,7 +14,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.6"
+#define VERSION "0.6a"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
@@ -1536,6 +1536,14 @@ CommandAction editor_quit(void) MYCC {
     return COMMAND_ACTION_NONE;
 }
 
+void editor_update_key_mode(void) MYCC {
+    uint8_t saved_cx, saved_cy;
+    get_cursor_pos(&saved_cx, &saved_cy);
+    set_cursor_pos(COLS - 1, SCREEN_HEIGHT - 1);
+    putch(get_key_mode() == KEYMODE_EXTEND ? '^' : ' ');
+    set_cursor_pos(saved_cx, saved_cy);
+}
+
 void edit(char* filepath, int32_t line, int32_t col) MYCC {
     /* Initial the editor; the entire space is initially the gap. */
     e_filename = NULL;
@@ -1594,7 +1602,10 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
         if (e_dirty & FLAG_AUTOSAVE) editor_autosave();
         editor_ready();
 
+        editor_update_key_mode();
         ch = getch();
+        editor_update_key_mode();
+
         if (get_key_mode() == KEYMODE_CODEPOINT) {
             editor_insert(ch);
             continue;

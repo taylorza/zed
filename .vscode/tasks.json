@@ -30,8 +30,7 @@
             "type": "shell",            
             "command": "${workspaceFolder}/../../emulator/hdfmonkey put ${workspaceFolder}/../../sdcard/tbblue-dev.sd zed /dot/",            
             "dependsOrder": "sequence",
-            "dependsOn": [
-                "Build",
+            "dependsOn": [            
             ],
             "problemMatcher": []
         },

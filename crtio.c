@@ -95,6 +95,11 @@ static uint8_t  key_beep_cycles = 0;    // beep cycles (0-off)
 static uint16_t key_beep_period = 280;  // beep sound period
 
 static uint8_t capslock = 0;            // is caplock engaged
+static uint8_t extend = 0;              // 0=none, 1=sticky armed, 2=sticky consumed
+static uint8_t extend_was_held = 0;      // previous frame physical extend state
+static uint8_t extend_key_index = 0xff;  // key index held under sticky extend
+static uint8_t extend_mode_pending = 0;  // return 0 once when entering extend mode
+static KeyMode key_mode_before_extend = KEYMODE_NORMAL;
 static uint8_t codepoint;               // codepoint input accumulator
 static uint8_t codepoint_count;         // codepoint input digit count
 
@@ -381,26 +386,84 @@ void print(const char *fmt, ...) MYCC {
 
 static char kbhandler(void) MYCC {
     kbd_scan();
-    
-    uint8_t shift = (uint8_t)((kbstate[7] & 1) | (kbstate[6] & 2));
-    
-    const uint8_t *tbl = unshifted;    
-    if (shift == 1) tbl = caps;
-    else if (shift == 2) tbl = sym;
-    else if (shift == 3) tbl = ext;
 
-    // Switch off the shift flags
+    uint8_t shift = (uint8_t)((kbstate[7] & 1) | (kbstate[6] & 2));
+    uint8_t holding_extend = (shift == 3);
+    uint8_t extend_pressed = (holding_extend && !extend_was_held);
+    char result = 0;
+
+    // Toggle sticky extend on press edge
+    if (current_settings.sticky_extend && extend_pressed) {
+        if (extend == 1) {
+            extend = 0;
+            extend_key_index = 0xff;
+            extend_mode_pending = 1;
+        } else if (extend == 0) {
+            extend = 1;
+        }
+    }
+
+    // Enter KEYMODE_EXTEND on release edge while armed
+    if (!holding_extend && extend_was_held && extend == 1 && current_key_mode != KEYMODE_EXTEND) {
+        key_mode_before_extend = current_key_mode;
+        current_key_mode = KEYMODE_EXTEND;
+        extend_mode_pending = 1;
+    }
+
+    // Strip shift flags for key scanning
     kbstate[6] &= 0xfd;
     kbstate[7] &= 0xfe;
-    
-    for (uint8_t i=0; i<8; ++i, tbl += 5) {
-        uint8_t c = kbstate[i];
+
+    const uint8_t *base_tbl = unshifted;
+    if (shift == 1) base_tbl = caps;
+    else if (shift == 2) base_tbl = sym;
+
+    // Find first pressed key
+    for (uint8_t row = 0; row < 8; ++row) {
+        uint8_t c = kbstate[row];
         if (!c) continue;
-        for (uint8_t j=0; c; c >>= 1, ++j) {
-            if (c & 1) return tbl[j];                                        
+        for (uint8_t col = 0; c; c >>= 1, ++col) {
+            if (!(c & 1)) continue;
+            uint8_t key_index = (uint8_t)(row * 5 + col);
+
+            // Sticky consumed: same key repeats, different key clears
+            if (extend == 2 && key_index == extend_key_index) {
+                result = ext[key_index];
+            } else {
+                if (extend == 2) {
+                    extend = 0;
+                    extend_key_index = 0xff;
+                }
+                if (holding_extend) {
+                    extend = 0;
+                    extend_key_index = 0xff;
+                    result = ext[key_index];
+                } else if (extend == 1) {
+                    extend = 2;
+                    extend_key_index = key_index;
+                    result = ext[key_index];
+                } else {
+                    result = base_tbl[key_index];
+                }
+            }
+            goto done;
         }
-    } 
-    return 0;  
+    }
+
+    // No key pressed: clear consumed state
+    if (extend == 2) {
+        extend = 0;
+        extend_key_index = 0xff;
+    }
+
+done:
+    // KEYMODE_EXTEND is only valid while armed and waiting
+    if (current_key_mode == KEYMODE_EXTEND && extend != 1) {
+        current_key_mode = key_mode_before_extend;
+    }
+
+    extend_was_held = holding_extend;
+    return result;
 }
 
 static char process_key(char key) MYCC {
@@ -488,8 +551,15 @@ char getch(void) MYCC {
         ++ticks;
         toggle_caret();
         char key = kbhandler();
-        
+        if (extend_mode_pending && key) {
+            extend_mode_pending = 0;
+        }
+
         if (!key) {
+            if (extend_mode_pending) {
+                extend_mode_pending = 0;
+                return 0;
+            }
             lastkey = 0;
             repeating = 0;
             continue;
@@ -520,7 +590,7 @@ char getch(void) MYCC {
                         current_edit_mode = EDITMODE_OVERWRITE;
                     else
                         current_edit_mode = EDITMODE_INSERT;
-                    continue;
+                    return 0; // Return 0 to ensure sticky mode changes are picked up
                 case KEY_CODEPOINT:
                     current_key_mode = KEYMODE_CODEPOINT;
                     codepoint = 0;

@@ -6,7 +6,7 @@ TARGET = +zxn
 ZCC     = zcc
 ASM     = z80asm
 
-MAX_ALLOCS = 200000
+MAX_ALLOCS = 200000 
 MAIN_FENCE = 0xd800
 
 CFLAGS = --list -m -c -clib=sdcc_iy -SO3 -opt-code-size --max-allocs-per-node$(MAX_ALLOCS) -pragma-include:zpragma.inc
