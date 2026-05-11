@@ -76,7 +76,7 @@ int32_t prev_mark_end;
 int32_t prev_highlight_row;
 
 typedef struct {
-    const char* short_cut_key;
+    char short_cut_key;
     const char* description;
     char key;
     CommandAction(*action)(void) MYCC;
@@ -93,15 +93,15 @@ CommandAction editor_goto(void) MYCC;
 CommandAction editor_quit(void) MYCC;
 
 static const Command commands[] = {
-    {"^S", "Save", KEY_SAVE, editor_save},
-    {"^M", "Mark", KEY_MARK, editor_mark},
-    {"^C", "Copy", KEY_COPY, editor_copy},
-    {"^X", "Cut", KEY_CUT, editor_cut},
-    {"^V", "Paste", KEY_PASTE, editor_paste},
-    {"^K", "Cut Line", KEY_CUTLINE, editor_cutline},
-    {"^F", "Find", KEY_FIND, editor_find},
-    {"^G", "Goto", KEY_GOTO, editor_goto},
-    {"^Q", "Quit", KEY_QUIT, editor_quit},
+    {'S', "Save", KEY_SAVE, editor_save},
+    {'M', "Mark", KEY_MARK, editor_mark},
+    {'C', "Copy", KEY_COPY, editor_copy},
+    {'X', "Cut", KEY_CUT, editor_cut},
+    {'V', "Paste", KEY_PASTE, editor_paste},
+    {'K', "Cut Line", KEY_CUTLINE, editor_cutline},
+    {'F', "Find", KEY_FIND, editor_find},
+    {'G', "Goto", KEY_GOTO, editor_goto},
+    {'Q', "Quit", KEY_QUIT, editor_quit},
     {NULL, NULL, 0, NULL}
 };
 
@@ -694,9 +694,10 @@ void editor_update_filename(void) MYCC {
     clreol();
 }
 
-void editor_print_hotkey(const char* short_cut_key, const char* description) MYCC {
-    int32_t len = HOTKEY_ITEM_WIDTH - (strlen(short_cut_key) + strlen(description));
-    set_attr(SELECT_ATTR); print(short_cut_key); set_attr(DEFAULT_ATTR);
+void editor_print_hotkey(char short_cut_key, const char* description, uint8_t show_extend) MYCC {
+    int32_t len = HOTKEY_ITEM_WIDTH - (2 + strlen(description));
+    putch(show_extend ? '^' : ' ');
+    set_attr(SELECT_ATTR); putch(short_cut_key); set_attr(DEFAULT_ATTR);
     print(" %s", description);
     while (len-- > 0) putch(' ');
 }
@@ -705,18 +706,33 @@ void editor_show_hotkeys(void) MYCC {
     set_cursor_pos(0, LINES + 1);
     int32_t i = 0;
     for (const Command* cmd = &commands[0]; cmd->short_cut_key != NULL; ++cmd) {
-        editor_print_hotkey(cmd->short_cut_key, cmd->description);
+        editor_print_hotkey(cmd->short_cut_key, cmd->description, !current_settings.sticky_extend);
         if (++i % HOTKEY_ITEMS_PER_LINE == 0) putch(NL);
     }
     print("Version: %s", VERSION);
     if (e_file_too_large) editor_message("File too large, save is disabled");
 }
 
+void editor_update_hotkeys(void) MYCC {
+    static KeyMode last_key_mode = KEYMODE_CODEPOINT; // unlikey at start :)
+    static KeyMode current_key_mode;
+    static uint8_t ox, oy;
+
+    current_key_mode = get_key_mode();
+    if (last_key_mode != current_key_mode 
+        && (current_key_mode == KEYMODE_EXTEND || last_key_mode == KEYMODE_EXTEND)) {
+        get_cursor_pos(&ox, &oy);
+        set_cursor_pos(0, LINES);
+        putch(current_key_mode == KEYMODE_EXTEND ? '^' : ' ');
+        set_cursor_pos(ox, oy);
+    }
+    last_key_mode = current_key_mode;
+}
+
 void editor_update_status(char key) MYCC {
     static uint8_t wasdirty = 0;
     static int32_t cursor_row, cursor_col;
     static uint8_t ox, oy;
-    static KeyMode last_key_mode = KEYMODE_CODEPOINT; // unlikey at start :)
     static KeyMode key_mode;
 
     get_cursor_pos(&ox, &oy);
@@ -1602,9 +1618,13 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
         if (e_dirty & FLAG_AUTOSAVE) editor_autosave();
         editor_ready();
 
-        editor_update_key_mode();
-        ch = getch();
-        editor_update_key_mode();
+        if (current_settings.sticky_extend){
+            editor_update_hotkeys();
+            ch = getch();
+            editor_update_hotkeys();
+        } else {
+            ch = getch();
+        }
 
         if (get_key_mode() == KEYMODE_CODEPOINT) {
             editor_insert(ch);
@@ -1642,6 +1662,7 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
                 if (e_dirty) editor_save();
                 settings_load(NULL);
                 settings_apply();
+                editor_show_hotkeys();
                 break;
             default:
                 switch (ch) {
