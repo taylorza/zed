@@ -1,3 +1,6 @@
+2026/07/12 - Version 0.6b
+- Performance optimizations suggested by: janko-jj
+
 2026/04/11 - Version 0.6a
 - Added sticky mode option for the Extend key (suggestion from:janko-jj)
 
