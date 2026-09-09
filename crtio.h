@@ -12,7 +12,8 @@
 
 #define KEY_ESC         0x01
 #define KEY_CAPSLOCK    0x02
-#define KEY_TAB         0x03
+#define KEY_TAB         0x03 // TRUE Video
+#define KEY_UNTAB       0xB3 // SYM + TRUE Video
 #define KEY_INVERSE     0x04
 #define KEY_LEFT        0x05
 #define KEY_DOWN        0x06

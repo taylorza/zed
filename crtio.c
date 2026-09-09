@@ -597,16 +597,16 @@ char getch(void) MYCC {
                     codepoint_count = 0;
                     continue;
                 case KEY_GRAPH:
-                    if (current_key_mode == KEYMODE_GRAPHICS)
+                    if (current_key_mode == KEYMODE_GRAPHICS || current_key_mode == KEYMODE_INVGRAPHICS)
                         current_key_mode = KEYMODE_NORMAL;
                     else
                         current_key_mode = KEYMODE_GRAPHICS;
                     continue;  
                 case KEY_INVERSE:
-                    if (current_key_mode == KEYMODE_INVGRAPHICS)
-                        current_key_mode = KEYMODE_GRAPHICS;
-                    else
+                    if (current_key_mode == KEYMODE_GRAPHICS)
                         current_key_mode = KEYMODE_INVGRAPHICS;
+                    else if (current_key_mode == KEYMODE_INVGRAPHICS)
+                        current_key_mode = KEYMODE_GRAPHICS;
                     continue;              
             }                        
         } else {

@@ -1,3 +1,6 @@
+2026/09/09 - Version 0.6c
+- New Feature: Tab/Untab selection (True Video - TAB, Sym+True Video - Untab)
+
 2026/07/12 - Version 0.6b
 - Performance optimizations suggested by: janko-jj
 

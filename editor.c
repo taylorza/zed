@@ -14,7 +14,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.6b"
+#define VERSION "0.6c"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
@@ -108,6 +108,9 @@ static const Command commands[] = {
 // Forward declarations
 void editor_busy(void) MYCC;
 void editor_move_right(void) MYCC;
+void editor_move_cursor_to(int32_t pos) MYCC;
+void editor_backspace(void) MYCC;
+int32_t editor_find_line_start(int32_t at) MYCC;
 
 char* get_filename(char* path) MYCC {
     char* s = &path[0];
@@ -185,12 +188,12 @@ uint8_t t_uint8;
 int32_t editor_find_line_start(int32_t at) MYCC {
     g_pos = at;
     if (g_pos <= 0) {
-        if (get_text_char(0) == NL) return 1;
+        if (editor_get_char(0) == NL) return 1;
         return 0;
     }
-    while (g_pos > 0 && get_text_char(g_pos) != NL)
+    while (g_pos > 0 && editor_get_char(g_pos) != NL)
         --g_pos;
-    if (get_text_char(g_pos) == NL) ++g_pos;
+    if (editor_get_char(g_pos) == NL) ++g_pos;
     return g_pos;
 }
 
@@ -244,6 +247,86 @@ void editor_insert_tab(void) MYCC {
     if (spaces == 0) spaces = 2;
     while (spaces--)
         editor_insert(' ');
+}
+
+static void editor_update_selection_after_insert(int32_t position, int32_t amount,
+                                                 int32_t* mark, int32_t* cursor) MYCC {
+    if (position <= *mark) *mark += amount;
+    if (position <= *cursor) *cursor += amount;
+}
+
+static void editor_update_selection_after_remove(int32_t position, int32_t amount,
+                                                 int32_t* mark, int32_t* cursor) MYCC {
+    if (*mark > position) {
+        *mark -= (*mark - position < amount) ? *mark - position : amount;
+    }
+    if (*cursor > position) {
+        *cursor -= (*cursor - position < amount) ? *cursor - position : amount;
+    }
+}
+
+/* Indent all lines that are (partially) covered by the current mark. */
+void editor_indent_selection(void) MYCC {
+    if (e_mark_start == -1) {
+        editor_insert_tab();
+        return;
+    }
+
+    int32_t start = e_mark_start < e_gap_start ? e_mark_start : e_gap_start;
+    int32_t end = e_mark_start > e_gap_start ? e_mark_start : e_gap_start;
+    if (start == end) return;
+
+    int32_t first_line_start = (start == 0) ? 0 : editor_find_line_start(start - 1);
+    int32_t last_line_start = editor_find_line_start(end - 1);
+    int32_t mark = e_mark_start;
+    int32_t cursor = e_gap_start;
+
+    for (int32_t cur = last_line_start; cur >= first_line_start;) {
+        int32_t previous_line_start = cur < 2 ? -1 : editor_find_line_start(cur - 2);
+        editor_move_cursor_to(cur);
+        editor_insert(' ');
+        editor_insert(' ');
+        editor_update_selection_after_insert(cur, 2, &mark, &cursor);
+        cur = previous_line_start;
+    }
+
+    e_mark_start = mark;
+    editor_move_cursor_to(cursor);
+    e_dirty = FLAG_DIRTY | FLAG_AUTOSAVE;
+    e_redraw_mode = REDRAW_ALL;
+}
+
+/* Unindent all lines that are (partially) covered by the current mark. */
+void editor_unindent_selection(void) MYCC {
+    int32_t start = e_mark_start == -1 ? e_gap_start :
+        (e_mark_start < e_gap_start ? e_mark_start : e_gap_start);
+    int32_t end = e_mark_start == -1 ? e_gap_start :
+        (e_mark_start > e_gap_start ? e_mark_start : e_gap_start);
+    int32_t first_line_start = (start == 0) ? 0 : editor_find_line_start(start - 1);
+    int32_t last_line_start = end == start ? first_line_start : editor_find_line_start(end - 1);
+    int32_t mark = e_mark_start;
+    int32_t cursor = e_gap_start;
+
+    for (int32_t cur = last_line_start; cur >= first_line_start;) {
+        int32_t previous_line_start = cur < 2 ? -1 : editor_find_line_start(cur - 2);
+        int32_t removed = 0;
+        if (editor_get_char(cur) == ' ') {
+            removed = 1;
+            if (editor_get_char(cur + 1) == ' ') {
+                removed = 2;
+            }
+            int32_t remove_count = removed;
+            editor_move_cursor_to(cur + removed);
+            while (removed--) editor_backspace();
+            editor_update_selection_after_remove(cur, remove_count, &mark, &cursor);
+        }
+        cur = previous_line_start;
+    }
+
+    e_mark_start = mark;
+    editor_move_cursor_to(cursor);
+    e_dirty = FLAG_DIRTY | FLAG_AUTOSAVE;
+    e_redraw_mode = REDRAW_ALL;
 }
 
 /* Insert newline, matching the current lines indent. */
@@ -1670,7 +1753,13 @@ void edit(char* filepath, int32_t line, int32_t col) MYCC {
                         editor_backspace();
                         break;
                     case KEY_TAB:
-                        editor_insert_tab();
+                        if (e_mark_start != -1)
+                            editor_indent_selection();
+                        else
+                            editor_insert_tab();
+                        break;
+                    case KEY_UNTAB:
+                        editor_unindent_selection();
                         break;
                     case KEY_ENTER:
                         editor_insert_newline();

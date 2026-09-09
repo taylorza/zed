@@ -89,6 +89,10 @@ The editor allows text selection for cutting or copying.
 * Press `↑K` to cut the current line (copy to buffer and remove from the document).
 * Navigate to a new location and press `↑V` to paste.
 
+#### Tab/Untab Selection:
+* Press `TRUE VIDEO` to indent the selected lines.
+* Press `SYMBOL SHIFT` + `TRUE VIDEO` to unindent the selected lines.
+
 **NOTE:** The copy buffer is limited to 8K. The start/anchor will adjust automatically to prevent exceeding this limit.
 
 ### Other commands
