@@ -24,7 +24,6 @@ _get_text_ptr:
     ld    a, (hl)
     nextreg 0x57, a
     ld    a, d
-    and   0x1F
     or    0xE0
     ld    d, a
     ret
@@ -43,7 +42,6 @@ _get_text_char:
     ld    a, (hl)
     nextreg 0x57, a
     ld    a, d
-    and   0x1F
     or    0xE0
     ld    d, a
     ld a, (de)
@@ -62,8 +60,7 @@ _set_text_char:
     add   hl, a
     ld    a, (hl)
     nextreg 0x57, a
-    ld    a, d
-    and   0x1F
+    ld    a, d    
     or    0xE0
     ld    d, a
     ld hl, 2            ; Stack offset to character argument
