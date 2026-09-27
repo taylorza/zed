@@ -137,8 +137,9 @@ blink_rate=<number>         # Caret blink rate (1-255) higher is slower (default
 key_beep_cycles=<number>    # Keyboard beep sound (0-off) (default 0x00)
 key_beep_period=<number>    # Keyboard beep half period per cycle (1-65535) (default 0x8c)
 default_line_ending=<mode>  # Default line ending for new files: crlf, lf, cr (default crlf)
+sticky_extend=<0/1>         # Sticky extend mode (0-off, 1-on) (default 0)
 
-font=<filename>             ; Font file to load (Default is built-in font)
+font=<filename>             # Font file to load (Default is built-in font)
 ```
 
 Colors are 3-3-2 bit RGB format 

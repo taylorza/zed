@@ -74,6 +74,8 @@ static const uint8_t ext[] = {
 
 char * const screen = (char * const)START_MAP;
 
+static uint8_t ula_state_page;
+
 static uint8_t old_reg_14;
 static uint8_t old_reg_15;
 static uint8_t old_reg_43;
@@ -244,7 +246,14 @@ static void setup_caret_sprites(void) MYCC {
     }
 }
 
-void ula_screen_save(void) MYCC {    
+void ula_screen_save(void) MYCC {
+    ula_state_page = esx_ide_bank_alloc(ESX_BANKTYPE_RAM);
+    
+    uint8_t old_reg_57 = ZXN_READ_REG(0x57);
+    ZXN_NEXTREGA(0x57, ula_state_page);
+    memcpy((void*)0xe000, (void*)0x4000, 6144 + 768);
+    ZXN_NEXTREGA(0x57, old_reg_57);
+
     old_border = ((*(uint8_t*)(0x5c48)) & 0b00111000) >> 3;
 
     ZXN_NEXTREG(0x43, 0b01000010);
@@ -253,8 +262,14 @@ void ula_screen_save(void) MYCC {
 }
 
 void ula_screen_restore(void) MYCC {
+    uint8_t old_reg_57 = ZXN_READ_REG(0x57);
+    ZXN_NEXTREGA(0x57, ula_state_page);
+    memcpy((void*)0x4000, (void*)0xe000, 6144 + 768);
+    ZXN_NEXTREGA(0x57, old_reg_57);
+
+    esx_ide_bank_free(ESX_BANKTYPE_RAM, ula_state_page);
     zx_border(old_border);
-    zx_cls(PAPER_WHITE | INK_BLACK);
+    //zx_cls(PAPER_WHITE | INK_BLACK);
 
     ZXN_NEXTREG(0x43, 0b01000010);
     ZXN_NEXTREG(0x40, 16); // Paper 0 palette entry

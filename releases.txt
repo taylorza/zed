@@ -1,3 +1,6 @@
+2026/09/09 - Version 0.6d
+- Update: ULA screen save and restore (suggested by: janko-jj)
+
 2026/09/09 - Version 0.6c
 - New Feature: Tab/Untab selection (True Video - TAB, Sym+True Video - Untab)
 
