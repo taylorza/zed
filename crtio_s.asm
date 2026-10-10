@@ -1,5 +1,6 @@
 SECTION code_l
 PUBLIC _kbd_scan
+PUBLIC _wait_no_key
 PUBLIC _kbstate
 
 _kbd_scan:
@@ -15,6 +16,14 @@ scan_port:
         inc hl
         dec e
         jr nz, scan_port
+        ret
+
+_wait_no_key:
+        ld bc,0x00fe
+        in a, (c)
+        cpl
+        and 0x1f
+        jr nz, _wait_no_key
         ret
 
 _kbstate: db 0,0,0,0,0,0,0,0

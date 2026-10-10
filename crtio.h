@@ -52,6 +52,8 @@ typedef enum KeyMode {
 
 #define NL              '\r'
 
+extern void wait_no_key(void) MYCC;
+
 void screen_init(void) MYCC;
 void screen_restore(void) MYCC;
 

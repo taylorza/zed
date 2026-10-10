@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <intrinsic.h>
 #ifdef __ZXNEXT
 #include <arch/zxn/esxdos.h>
 #endif
@@ -14,7 +15,7 @@
 #include "crtio.h"
 #include "editor.h"
 
-#define VERSION "0.6d"
+#define VERSION "0.6e"
 
 #define HOTKEY_ITEM_WIDTH 12
 #define HOTKEY_ITEMS_PER_LINE 6
@@ -981,17 +982,21 @@ void editor_redraw(void) MYCC {
 }
 
 CommandAction confirm(const char* prompt) MYCC {
-    CommandAction retval;
+    CommandAction retval = COMMAND_ACTION_NONE;
 
     set_cursor_pos(0, LINES);
     print("%s (y/n) ", prompt);
-    char ch = getch();
-
-    switch (ch) {
-        case 'Y':
-        case 'y': retval = COMMAND_ACTION_YES; break;
-        case KEY_ESC: retval = COMMAND_ACTION_CANCEL; break;
-        default: retval = COMMAND_ACTION_NO; break;
+    wait_no_key();
+    
+    while (retval == COMMAND_ACTION_NONE) {
+        char ch = getch();
+        switch (ch) {
+            case 'Y':
+            case 'y': retval = COMMAND_ACTION_YES; break;
+            case 'N':
+            case 'n': retval = COMMAND_ACTION_NO; break;
+            case KEY_ESC: retval = COMMAND_ACTION_CANCEL; break;
+        }
     }
     set_cursor_pos(0, LINES);
     clreol();
@@ -1332,6 +1337,18 @@ CommandAction editor_save(void) MYCC {
     char* p = get_filename(filename);
     if (!edit_line("File name", NULL, p, MAX_FILENAME_LEN))
         return COMMAND_ACTION_CANCEL;
+
+    size_t i = 0;
+    while (is_whitespace(p[i]))
+        ++i;
+    size_t len = strlen(p + i);
+    if (i > 0) memmove(p, p + i, len + 1);
+    
+    while (len > 0 && is_whitespace(p[len - 1]))
+        --len;
+    p[len] = '\0';
+    
+    if (!*p) return COMMAND_ACTION_CANCEL;
 
     e_filename = &filename[0];
     int32_t status = editor_save_file(0);
