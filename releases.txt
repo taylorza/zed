@@ -1,3 +1,7 @@
+2026/10/11 - Version 0.6e
+- Update: Make sure no keys are pressed before registering user responses to Y/N prompts (reported by: janko-jj)
+- Fixed: Trimming leading and trailing whitespace from user input for files and ignore empty filenames
+
 2026/09/09 - Version 0.6d
 - Update: ULA screen save and restore (suggested by: janko-jj)
 
